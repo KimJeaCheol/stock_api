@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+flower
+celery
+redis
+pandas
+numpy
+yfinance
