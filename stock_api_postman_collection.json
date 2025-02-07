@@ -1,0 +1,238 @@
+{
+    "info": {
+        "name": "Stock API Collection",
+        "_postman_id": "12345678-abcd-efgh-ijkl-123456789012",
+        "description": "A collection to test the Stock API endpoints",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Fetch Sectors",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/sectors",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "sectors"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Financial Screened Stocks",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/stocks",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "stocks"
+                    ],
+                    "query": [
+                        {
+                            "key": "market_cap_more_than",
+                            "value": "1000000000"
+                        },
+                        {
+                            "key": "price_more_than",
+                            "value": "50"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Calculate Fluctuations",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/fluctuations?ticker=AAPL&period=6mo",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "fluctuations"
+                    ],
+                    "query": [
+                        {
+                            "key": "ticker",
+                            "value": "AAPL"
+                        },
+                        {
+                            "key": "period",
+                            "value": "6mo"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Recommend Stocks",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/recommend?limit=5",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "recommend"
+                    ],
+                    "query": [
+                        {
+                            "key": "limit",
+                            "value": "5"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Market Top Gainers",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/gainers",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "gainers"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Market Biggest Losers",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/losers",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "losers"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Market Highest Volume",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/actives",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "actives"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Market Indices",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/indices",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "indices"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Quotes for Multiple Symbols",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/quotes?symbols=AAPL,GOOGL,MSFT",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "quotes"
+                    ],
+                    "query": [
+                        {
+                            "key": "symbols",
+                            "value": "AAPL,GOOGL,MSFT"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Fetch Price and EPS",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:8000/api/v1/price_eps?symbol=AAPL",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8000",
+                    "path": [
+                        "api",
+                        "v1",
+                        "price_eps"
+                    ],
+                    "query": [
+                        {
+                            "key": "symbol",
+                            "value": "AAPL"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}
