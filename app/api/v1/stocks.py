@@ -200,7 +200,7 @@ async def get_top_gainers():
     
     :return: 상위 상승 주식 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/stock_market/gainers"
+    url = "https://financialmodelingprep.com/stable/biggest-gainers"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -223,7 +223,7 @@ async def get_biggest_losers():
     
     :return: 상위 하락 주식 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/stock_market/losers"
+    url = "https://financialmodelingprep.com/stable/biggest-losers"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -246,7 +246,7 @@ async def get_highest_volume():
     
     :return: 거래량 상위 주식 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/stock_market/actives"
+    url = "https://financialmodelingprep.com/stable/most-actives"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -1359,9 +1359,10 @@ async def get_income_statement(symbol: str, period: str = "annual"):
     :param period: 데이터 조회 기간 ("annual" 또는 "quarterly", 기본값: "annual")
     :return: 손익계산서 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v3/income-statement/{symbol}"
+    url = f"https://financialmodelingprep.com/stable/income-statement"
     params = {
         "period": period,
+        "symbol": symbol,
         "apikey": settings.API_KEY
     }
 
@@ -1376,3 +1377,150 @@ async def get_income_statement(symbol: str, period: str = "annual"):
     except Exception as e:
         logger.error(f"Income Statement 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="Income Statement 데이터를 불러오는 중 오류가 발생했습니다.")
+    
+@router.get("/ratings-snapshot/{symbol}")
+async def get_ratings_snapshot(symbol: str, limit: int = 1):
+    """
+    특정 주식의 재무 상태 및 평가 지표를 조회합니다.
+
+    :param symbol: 주식 심볼 (예: AAPL)
+    :param limit: 조회할 데이터 개수 (기본값: 1)
+    :return: 재무 평가 지표 데이터
+    """
+    url = f"https://financialmodelingprep.com/stable/ratings-snapshot"
+    params = {
+        "limit": limit,
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"{symbol}의 재무 평가 데이터를 찾을 수 없습니다.")
+        return data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Ratings Snapshot 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Ratings Snapshot 데이터를 불러오는 중 오류가 발생했습니다.")
+
+@router.get("/sector-pe-snapshot")
+async def get_sector_pe_snapshot(date: str, exchange: Optional[str] = None, sector: Optional[str] = None):
+    """
+    특정 날짜의 섹터별 주가수익비율(P/E) 데이터를 조회합니다.
+
+    :param date: 조회할 날짜 (예: "2024-02-01")
+    :param exchange: 특정 거래소 필터링 (예: "NASDAQ")
+    :param sector: 특정 섹터 필터링 (예: "Technology")
+    :return: 섹터 P/E 데이터
+    """
+    url = "https://financialmodelingprep.com/stable/sector-pe-snapshot"
+    params = {
+        "date": date,
+        "apikey": settings.API_KEY
+    }
+    if exchange:
+        params["exchange"] = exchange
+    if sector:
+        params["sector"] = sector
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail="해당 날짜의 섹터 P/E 데이터를 찾을 수 없습니다.")
+        return data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Sector P/E Snapshot 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Sector P/E 데이터를 불러오는 중 오류가 발생했습니다.")
+    
+    
+@router.get("/industry-pe-snapshot")
+async def get_industry_pe_snapshot(date: str, exchange: Optional[str] = None, industry: Optional[str] = None):
+    """
+    특정 날짜의 산업별 주가수익비율(P/E) 데이터를 조회합니다.
+
+    :param date: 조회할 날짜 (예: "2024-02-01")
+    :param exchange: 특정 거래소 필터링 (예: "NASDAQ")
+    :param industry: 특정 산업 필터링 (예: "Technology")
+    :return: 산업 P/E 데이터
+    """
+    url = "https://financialmodelingprep.com/stable/industry-pe-snapshot"
+    params = {
+        "date": date,
+        "apikey": settings.API_KEY
+    }
+    if exchange:
+        params["exchange"] = exchange
+    if industry:
+        params["industry"] = industry
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail="해당 날짜의 산업 P/E 데이터를 찾을 수 없습니다.")
+        return data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Industry P/E Snapshot 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Industry P/E 데이터를 불러오는 중 오류가 발생했습니다.")
+
+@router.get("/sector-performance-snapshot")
+async def get_sector_performance_snapshot(date: str, exchange: Optional[str] = None, sector: Optional[str] = None):
+    """
+    특정 날짜의 시장 섹터 성과 데이터를 조회합니다.
+
+    :param date: 조회할 날짜 (예: "2024-02-01")
+    :param exchange: 특정 거래소 필터링 (예: "NASDAQ")
+    :param sector: 특정 섹터 필터링 (예: "Technology")
+    :return: 섹터 성과 데이터
+    """
+    url = "https://financialmodelingprep.com/stable/sector-performance-snapshot"
+    params = {
+        "date": date,
+        "apikey": settings.API_KEY
+    }
+    if exchange:
+        params["exchange"] = exchange
+    if sector:
+        params["sector"] = sector
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail="해당 날짜의 섹터 성과 데이터를 찾을 수 없습니다.")
+        return data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Sector Performance Snapshot 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Sector Performance 데이터를 불러오는 중 오류가 발생했습니다.")
+    
+@router.get("/industry-performance-snapshot")
+async def get_industry_performance_snapshot(date: str, exchange: Optional[str] = None, industry: Optional[str] = None):
+    """
+    특정 날짜의 산업별 성과 데이터를 조회합니다.
+
+    :param date: 조회할 날짜 (예: "2024-02-01")
+    :param exchange: 특정 거래소 필터링 (예: "NASDAQ")
+    :param industry: 특정 산업 필터링 (예: "Technology")
+    :return: 산업 성과 데이터
+    """
+    url = "https://financialmodelingprep.com/stable/industry-performance-snapshot"
+    params = {
+        "date": date,
+        "apikey": settings.API_KEY
+    }
+    if exchange:
+        params["exchange"] = exchange
+    if industry:
+        params["industry"] = industry
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail="해당 날짜의 산업 성과 데이터를 찾을 수 없습니다.")
+        return data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Industry Performance Snapshot 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Industry Performance 데이터를 불러오는 중 오류가 발생했습니다.")
