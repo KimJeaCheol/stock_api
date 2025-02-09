@@ -2,27 +2,15 @@ import logging
 
 from celery import Celery
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from app.core.logging import logger  # 이미 설정된 logger import
 
 celery_app = Celery(
     'worker',
-    broker='redis://redis:6379/0',  # Docker Compose에서 Redis 서비스 이름 사용
+    broker='redis://redis:6379/0',
     backend='redis://redis:6379/0',
-    include=["app.tasks.tasks"]  # Celery 작업이 정의된 모듈
+    include=["app.tasks.tasks"]  # ✅ Celery가 동적으로 태스크를 찾도록 설정
 )
 
 celery_app.conf.update(
     broker_connection_retry_on_startup=True
 )
-
-celery_app.conf.beat_schedule = {
-    "fetch-stock-data-every-10-minutes": {
-        "task": "app.tasks.tasks.fetch_stock_data",
-        "schedule": 600.0,  # 10분마다 실행
-        "args": ("AAPL",)  # 작업에 전달할 인자
-    },
-}
-
-

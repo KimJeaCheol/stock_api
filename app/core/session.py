@@ -1,24 +1,16 @@
 # app/core/session.py
+
 import aiohttp
-import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+from aiohttp import ClientSession
 
 
-def setup_session():
-    session = requests.Session()
-    retry = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
-    return session
-
-async def get_session():
-    conn = aiohttp.TCPConnector(limit=100)
+async def get_session() -> ClientSession:
+    """비동기적으로 HTTP 세션을 생성합니다."""
+    conn = aiohttp.TCPConnector(limit=100)  # 최대 100개의 연결을 재사용
     session = aiohttp.ClientSession(connector=conn)
     return session
 
-async def close_session(session: aiohttp.ClientSession):
+async def close_session(session: ClientSession):
+    """비동기적으로 세션을 종료합니다."""
     await session.close()
 
-session = setup_session()
