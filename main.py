@@ -7,7 +7,8 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
 
-from app.api.v1 import stocks
+from app.api.v1 import stocks_v1
+from app.api.v2 import stocks_v2
 from app.core.logging import logger  # 이미 설정된 logger import
 
 
@@ -64,12 +65,13 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            stock_data = await stocks.get_stock_quote(data)
+            stock_data = await stocks_v1.get_stock_quote(data)
             await manager.send_personal_message(json.dumps(stock_data), websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-app.include_router(stocks.router, prefix="/api/v1")
+app.include_router(stocks_v1.router, prefix="/api/v1")
+app.include_router(stocks_v2.router, prefix="/api/v2")
 
 if __name__ == "__main__":
     import uvicorn
