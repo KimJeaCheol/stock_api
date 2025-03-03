@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Any, List, Union,Optional
+from typing import Any, List, Optional, Union
 
 import aiohttp
 import numpy as np
@@ -10,7 +10,6 @@ import valinvest
 import yfinance as yf
 from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
-from financetoolkit import Toolkit
 
 from app.core.config import load_strategy, save_strategy, settings
 from app.core.logging import logger  # 이미 설정된 logger import
@@ -1259,25 +1258,6 @@ async def get_valinvest(symbol: str):
     except Exception as e:
         logger.error(f"Failed to calculate F-Score for {symbol}: {e}")
         raise HTTPException(status_code=500, detail="F-Score 계산 중 오류 발생")
-
-@router.get("/ratios")
-async def get_profitability_ratios(ticker: str):
-    """
-    특정 종목의 수익성 비율(Profitability Ratios) 데이터를 반환하는 API
-    """
-    try:
-        toolkit = Toolkit(["AAPL", "TSLA"], api_key=settings.API_KEY)
-        profitability_ratios = toolkit.ratios.collect_profitability_ratios()
-
-        if ticker not in profitability_ratios.index:
-            raise HTTPException(status_code=404, detail="Ticker not found")
-
-        # JSON 직렬화 가능하도록 변환
-        result = json.loads(profitability_ratios.loc[ticker].to_json())
-        return result
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
     
 def convert_numpy_values(data):
     """ numpy.int64, numpy.float64 데이터를 Python 기본 타입(int, float)으로 변환 """
@@ -1349,6 +1329,71 @@ async def get_short_interest(symbol: str):
     except Exception as e:
         logger.error(f"Error fetching short interest data for {symbol}: {e}")
         raise HTTPException(status_code=500, detail=f"Error retrieving short interest data: {str(e)}")
+
+@router.get("/commodities/list")
+async def get_commodities_list():
+    """
+    Financial Modeling Prep API를 사용하여 원자재(Commodities) 목록을 가져옵니다.
+    
+    :return: 원자재 목록
+    """
+    url = "https://financialmodelingprep.com/stable/commodities-list"
+    params = {"apikey": settings.API_KEY}
+
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail="원자재 목록 데이터를 찾을 수 없습니다.")
+        return data
+
+    except Exception as e:
+        logger.error(f"Commodities List 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Commodities 목록 데이터를 불러오는 중 오류가 발생했습니다.")
+
+
+@router.get("/commodities/price/light/{symbol}")
+async def get_commodity_price_light(symbol: str):
+    """
+    Financial Modeling Prep API를 사용하여 특정 원자재의 가벼운 가격 데이터를 가져옵니다.
+    
+    :param symbol: 원자재 심볼 (예: GCUSD - 금, CLUSD - 원유)
+    :return: 원자재 가격 데이터 (Light Version)
+    """
+    url = f"https://financialmodelingprep.com/stable/historical-price-eod/light"
+    params = {"symbol": symbol, "apikey": settings.API_KEY}
+
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"{symbol}의 가벼운 가격 데이터를 찾을 수 없습니다.")
+        return data
+
+    except Exception as e:
+        logger.error(f"Commodity Light Price 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Commodity Light Price 데이터를 불러오는 중 오류가 발생했습니다.")
+
+
+@router.get("/commodities/price/full/{symbol}")
+async def get_commodity_price_full(symbol: str):
+    """
+    Financial Modeling Prep API를 사용하여 특정 원자재의 전체 가격 데이터를 가져옵니다.
+    
+    :param symbol: 원자재 심볼 (예: GCUSD - 금, CLUSD - 원유)
+    :return: 원자재 가격 데이터 (Full Version)
+    """
+    url = f"https://financialmodelingprep.com/stable/historical-price-eod/full"
+    params = {"symbol": symbol, "apikey": settings.API_KEY}
+
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"{symbol}의 전체 가격 데이터를 찾을 수 없습니다.")
+        return data
+
+    except Exception as e:
+        logger.error(f"Commodity Full Price 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Commodity Full Price 데이터를 불러오는 중 오류가 발생했습니다.")
+  
     
 @router.get("/income-statement/{symbol}")    
 async def get_income_statement(symbol: str, period: str = "annual"):
@@ -1524,95 +1569,3 @@ async def get_industry_performance_snapshot(date: str, exchange: Optional[str] =
     except Exception as e:
         logger.error(f"Industry Performance Snapshot 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="Industry Performance 데이터를 불러오는 중 오류가 발생했습니다.")
-    
-@router.get("/dupont-analysis/{symbol}")
-async def get_dupont_analysis(symbol: str):
-    """
-    특정 기업의 Dupont 분석 데이터를 조회하는 API
-
-    :param symbol: 주식 심볼 (예: AAPL, TSLA)
-    :return: Dupont 분석 결과 (Interest Burden Ratio, Tax Burden Ratio 등)
-    """
-    try:
-        toolkit = Toolkit(["TSLA", "AMZN"], api_key=settings.API_KEY, quarterly=True, start_date="2022-12-31")
-        
-        # Dupont Analysis 실행
-        dupont_analysis = toolkit.models.get_extended_dupont_analysis()
-
-        if symbol not in dupont_analysis.index:
-            raise HTTPException(status_code=404, detail=f"{symbol}의 Dupont 분석 데이터를 찾을 수 없습니다.")
-
-        # JSON 변환 후 반환
-        result = dupont_analysis.loc[symbol].to_dict()
-        return {"symbol": symbol, "dupont_analysis": result}
-
-    except Exception as e:
-        logger.error(f"Dupont Analysis 조회 실패: {e}")
-        raise HTTPException(status_code=500, detail="Dupont 분석 데이터를 불러오는 중 오류 발생")
-    
-@router.get("/options-greeks/")
-async def get_options_greeks(
-    tickers: Union[str, List[str]] = Query(..., description="주식 심볼 목록 (예: TSLA 또는 TSLA, MU)"),
-    start_date: str = "2024-01-03"
-):
-    """
-    특정 기업 또는 여러 기업의 옵션 Greeks 데이터를 조회하는 API
-
-    :param tickers: 주식 심볼 (예: TSLA 또는 ['TSLA', 'MU'])
-    :param start_date: 시작 날짜 (기본값: "2024-01-03")
-    :return: 옵션 Greeks 데이터 (Delta, Gamma, Theta, Vega, Rho 등)
-    """
-    try:
-        # tickers가 단일 문자열이면 리스트로 변환
-        if isinstance(tickers, str):
-            tickers = [tickers]
-
-        toolkit = Toolkit(tickers, api_key=settings.API_KEY)
-        
-        # Greeks 데이터 조회
-        all_greeks = toolkit.options.collect_all_greeks(start_date=start_date)
-
-        # 해당 종목들이 데이터에 존재하는지 확인
-        missing_tickers = [ticker for ticker in tickers if ticker not in all_greeks.index]
-        if missing_tickers:
-            raise HTTPException(status_code=404, detail=f"{missing_tickers}의 옵션 Greeks 데이터를 찾을 수 없습니다.")
-
-        # JSON 직렬화 후 반환
-        result = {ticker: all_greeks.loc[ticker].to_dict() for ticker in tickers}
-        return {"tickers": tickers, "options_greeks": result}
-
-    except Exception as e:
-        logger.error(f"Options Greeks 조회 실패: {e}")
-        raise HTTPException(status_code=500, detail="옵션 Greeks 데이터를 불러오는 중 오류 발생")
-
-
-@router.get("/technical-module")
-async def get_average_directional_index(symbols: list[str] = Query(...), period: str = "weekly"):
-    """
-    여러 개의 주식 심볼에 대한 평균 방향성 지수(ADX) 조회
-
-    :param symbols: 조회할 주식 티커 목록 (예: AAPL, TSLA, MSFT)
-    :param period: 분석 기간 (daily, weekly, quarterly, yearly)
-    :return: 각 주식 심볼의 ADX 값
-    """
-    valid_periods = ["daily", "weekly", "quarterly", "yearly"]
-    if period not in valid_periods:
-        raise HTTPException(status_code=400, detail=f"유효하지 않은 period 값입니다. 사용 가능: {valid_periods}")
-
-    try:
-        toolkit = Toolkit(symbols, api_key=settings.API_KEY)
-        adx_data = toolkit.technicals.get_average_directional_index(period=period)
-
-        # 🔍 ADX 데이터 확인 로그
-        logger.info(f"ADX Data Retrieved: {adx_data}")
-
-        # 데이터가 비어 있는 경우 오류 반환
-        if adx_data.empty:
-            logger.warning("ADX 데이터가 존재하지 않음. 데이터 부족 가능.")
-            raise HTTPException(status_code=404, detail="ADX 데이터를 찾을 수 없습니다. 데이터가 부족할 수 있습니다.")
-
-        result = {symbol: adx_data[symbol].tolist() if symbol in adx_data else "ADX 데이터 없음" for symbol in symbols}
-        return result
-    except Exception as e:
-        logger.error(f"ADX 데이터 조회 실패: {e}")
-        raise HTTPException(status_code=500, detail=f"ADX 데이터를 가져오는 중 오류 발생: {str(e)}")
