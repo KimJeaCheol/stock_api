@@ -1,0 +1,23 @@
+version: 1
+disable_existing_loggers: False
+formatters:
+  standard:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: standard
+    level: DEBUG
+    stream: ext://sys.stdout
+
+loggers:
+  uvicorn:
+    level: DEBUG
+    handlers: [console]
+    propagate: no
+
+  fastapi:
+    level: DEBUG
+    handlers: [console]
+    propagate: no
