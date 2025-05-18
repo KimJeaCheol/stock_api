@@ -1,0 +1,155 @@
+2025-05-17 00:10:28,074 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 00:10:28,251 - root - INFO - Starting up the FastAPI application
+2025-05-17 00:13:15,035 - root - INFO - Shutting down the FastAPI application
+2025-05-17 00:13:15,035 - root - INFO - All WebSocket connections closed
+2025-05-17 00:13:25,566 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 00:13:25,729 - root - INFO - Starting up the FastAPI application
+2025-05-17 00:20:47,210 - root - INFO - Shutting down the FastAPI application
+2025-05-17 00:20:47,211 - root - INFO - All WebSocket connections closed
+2025-05-17 00:20:58,575 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 00:20:58,731 - root - INFO - Starting up the FastAPI application
+2025-05-17 00:27:51,201 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 00:27:51,205 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 00:27:52,075 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/profile
+2025-05-17 00:27:52,870 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratios-ttm
+2025-05-17 00:27:53,682 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/discounted-cash-flow
+2025-05-17 00:27:54,483 - root - ERROR - [fetch_fmp_data] TSM 실패: 404: TSM의 DCF 데이터를 찾을 수 없습니다.
+2025-05-17 00:27:54,485 - root - ERROR - Unhandled exception: 'profile'
+2025-05-17 00:33:33,263 - root - INFO - Shutting down the FastAPI application
+2025-05-17 00:33:33,264 - root - INFO - All WebSocket connections closed
+2025-05-17 00:33:44,352 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 00:33:44,510 - root - INFO - Starting up the FastAPI application
+2025-05-17 00:33:44,522 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 00:33:44,524 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 00:33:45,467 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/profile
+2025-05-17 00:33:45,468 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratios-ttm
+2025-05-17 00:33:45,469 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/discounted-cash-flow
+2025-05-17 00:33:45,470 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratings-snapshot
+2025-05-17 00:33:46,280 - root - ERROR - [fetch_fmp_data] TSM 병렬 호출 실패: 404: TSM의 DCF 데이터를 찾을 수 없습니다.
+2025-05-17 00:33:46,282 - root - ERROR - Unhandled exception: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-05-17 00:38:55,847 - root - INFO - Shutting down the FastAPI application
+2025-05-17 00:38:55,847 - root - INFO - All WebSocket connections closed
+2025-05-17 00:39:08,149 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 00:39:08,305 - root - INFO - Starting up the FastAPI application
+2025-05-17 00:39:08,315 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 00:39:08,316 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 00:39:09,234 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/profile
+2025-05-17 00:39:09,234 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratios-ttm
+2025-05-17 00:39:09,235 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/discounted-cash-flow
+2025-05-17 00:39:09,236 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratings-snapshot
+2025-05-17 00:39:10,040 - root - ERROR - [fetch_fmp_data] LTM 병렬 호출 실패: 404: LTM의 DCF 데이터를 찾을 수 없습니다.
+2025-05-17 00:39:10,043 - root - ERROR - Unhandled exception: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-05-17 01:20:55,640 - root - INFO - Shutting down the FastAPI application
+2025-05-17 01:20:55,641 - root - INFO - All WebSocket connections closed
+2025-05-17 01:21:08,021 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 01:21:08,245 - root - INFO - Starting up the FastAPI application
+2025-05-17 01:49:09,191 - root - INFO - Shutting down the FastAPI application
+2025-05-17 01:49:09,194 - root - INFO - All WebSocket connections closed
+2025-05-17 01:49:20,373 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 01:49:20,556 - root - INFO - Starting up the FastAPI application
+2025-05-17 01:49:28,049 - root - INFO - Shutting down the FastAPI application
+2025-05-17 01:49:28,050 - root - INFO - All WebSocket connections closed
+2025-05-17 01:49:52,080 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 01:49:52,235 - root - INFO - Starting up the FastAPI application
+2025-05-17 01:54:29,964 - root - INFO - Shutting down the FastAPI application
+2025-05-17 01:54:29,966 - root - INFO - All WebSocket connections closed
+2025-05-17 01:54:39,874 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 01:54:40,019 - root - INFO - Starting up the FastAPI application
+2025-05-17 01:57:19,029 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 01:57:19,032 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 01:57:19,910 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/profile
+2025-05-17 01:57:19,911 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratios-ttm
+2025-05-17 01:57:19,911 - root - INFO - 📊 Custom DCF 호출: LTM → https://financialmodelingprep.com/api/v4/custom-discounted-cash-flow
+2025-05-17 01:57:19,912 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratings-snapshot
+2025-05-17 01:57:20,703 - root - ERROR - [get_custom_dcf_valuation] LTM 실패: 401, message='Unauthorized', url='https://financialmodelingprep.com/api/v4/custom-discounted-cash-flow'
+2025-05-17 01:57:20,737 - root - ERROR - Unhandled exception: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-05-17 01:57:33,682 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 01:57:33,682 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 01:57:34,544 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/profile
+2025-05-17 01:57:34,544 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratios-ttm
+2025-05-17 01:57:34,545 - root - INFO - 📊 Custom DCF 호출: LTM → https://financialmodelingprep.com/api/v4/custom-discounted-cash-flow
+2025-05-17 01:57:34,546 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratings-snapshot
+2025-05-17 01:57:35,342 - root - ERROR - [get_custom_dcf_valuation] LTM 실패: 401, message='Unauthorized', url='https://financialmodelingprep.com/api/v4/custom-discounted-cash-flow'
+2025-05-17 01:57:35,356 - root - ERROR - Unhandled exception: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-05-17 02:11:47,236 - root - INFO - Shutting down the FastAPI application
+2025-05-17 02:11:47,237 - root - INFO - All WebSocket connections closed
+2025-05-17 02:11:58,942 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 02:11:59,129 - root - INFO - Starting up the FastAPI application
+2025-05-17 02:11:59,138 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 02:11:59,139 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 02:12:00,062 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/profile
+2025-05-17 02:12:00,063 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratios-ttm
+2025-05-17 02:12:00,064 - root - INFO - 📊 Custom DCF 호출: LTM → https://financialmodelingprep.com/stable/custom-discounted-cash-flow
+2025-05-17 02:12:00,065 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/ratings-snapshot
+2025-05-17 02:12:02,392 - root - ERROR - [get_custom_dcf_valuation] LTM 실패: 401, message='Unauthorized', url='https://financialmodelingprep.com/stable/custom-discounted-cash-flow'
+2025-05-17 02:12:03,116 - root - ERROR - Unhandled exception: 
+
+You tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.
+
+You can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. 
+
+Alternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`
+
+A detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742
+
+2025-05-17 02:14:30,237 - root - INFO - Shutting down the FastAPI application
+2025-05-17 02:14:30,237 - root - INFO - All WebSocket connections closed
+2025-05-17 02:14:42,218 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 02:14:42,438 - root - INFO - Starting up the FastAPI application
+2025-05-17 02:14:42,450 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 02:14:42,453 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 02:14:43,343 - root - INFO - Completed in 0.89ms
+2025-05-17 02:14:47,364 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 02:14:47,365 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 02:14:48,191 - root - INFO - Completed in 0.83ms
+2025-05-17 02:14:50,588 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 02:14:50,589 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 02:14:51,439 - root - INFO - Completed in 0.85ms
+2025-05-17 02:15:11,130 - root - INFO - Shutting down the FastAPI application
+2025-05-17 02:15:11,130 - root - INFO - All WebSocket connections closed
+2025-05-17 02:15:21,151 - asyncio - DEBUG - Using selector: SelectSelector
+2025-05-17 02:15:21,299 - root - INFO - Starting up the FastAPI application
+2025-05-17 02:15:21,308 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 02:15:21,310 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 02:15:22,184 - root - INFO - Completed in 0.87ms
+2025-05-17 02:15:32,554 - root - INFO - Request: GET http://localhost:8001/api/v1/analysis/pipeline
+2025-05-17 02:15:32,555 - root - INFO - FMP URL : https://financialmodelingprep.com/stable/company-screener
+2025-05-17 02:15:33,373 - root - INFO - Completed in 0.82ms
+2025-05-17 02:15:41,660 - root - INFO - Shutting down the FastAPI application
+2025-05-17 02:15:41,661 - root - INFO - All WebSocket connections closed
