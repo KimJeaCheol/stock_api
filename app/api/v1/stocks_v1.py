@@ -2,14 +2,17 @@
 
 import asyncio
 import json
+import os
 from typing import Any, List, Optional, Union
 
 import aiohttp
+import matplotlib.pyplot as plt
 import numpy as np
 import valinvest
 import yfinance as yf
 from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
+from openai import OpenAI
 
 from app.core.config import load_strategy, save_strategy, settings
 from app.core.logging import logger  # 이미 설정된 logger import
@@ -19,23 +22,37 @@ from app.tasks.tasks import (analyze_candlestick_patterns, analyze_trend,
 
 router = APIRouter()
 
-async def call_api_async(url: str, params: Optional[dict] = None, timeout: int = 10):
-    """비동기 API 호출을 처리하는 함수"""
-    async with aiohttp.ClientSession() as session:  # 항상 새로운 세션 생성
-        try:
-            logger.info(f"FMP URL : {url}")
-            async with session.get(url, params=params, timeout=timeout) as response:
-                response.raise_for_status()
-                return await response.json()
-        except aiohttp.ClientError as e:
-            logger.error(f"API 호출 실패: {url} - {e}")
-            raise HTTPException(status_code=500, detail=f"API 호출 실패: {e}")
+async def call_api_async(url: str, params: dict = {}, method: str = "GET", json_data: dict = None , timeout: int = 10):
+    logger.info(f"📡 API 요청 시작: {method} {url}")
+    logger.info(f"📦 PARAMS: {params}")
+    if json_data:
+        logger.info(f"📤 JSON BODY: {json_data}")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            if method == "POST":
+                async with session.post(url, params=params, json=json_data, timeout=timeout) as response:
+                    logger.info(f"📬 응답 상태: {response.status}")
+                    response.raise_for_status()
+                    data = await response.json()
+                    logger.info(f"📨 응답 데이터 요약: {str(data)[:300]}")  # 길이 제한
+                    return data
+            else:
+                async with session.get(url, params=params, timeout=timeout) as response:
+                    logger.info(f"📬 응답 상태: {response.status}")
+                    response.raise_for_status()
+                    data = await response.json()
+                    logger.info(f"📨 응답 데이터 요약: {str(data)[:300]}")
+                    return data
+    except Exception as e:
+        logger.error(f"[call_api_async] 호출 실패: {url} → {e}")
+        return []
 
 
 @router.get("/sectors")
 async def fetch_sectors():
     logger.info("Fetching sectors performance data")
-    url = f"https://financialmodelingprep.com/api/v4/sectors-performance"
+    url = f"{settings.FMP_BASE_URL}/api/v4/sectors-performance"
     data = await call_api_async(url, params={"apikey": settings.API_KEY})
     logger.info(f"Sectors data retrieved: {len(data)} items")
     return data
@@ -62,7 +79,7 @@ async def fetch_financial_screened_stocks(
     limit: int = Query(None),
 ):
     logger.info("Fetching financial screened stocks with provided criteria")
-    url = f"https://financialmodelingprep.com/api/v3/stock-screener"
+    url = f"{settings.FMP_BASE_URL}/api/v3/stock-screener"
     params = {
         'apikey': settings.API_KEY,
         'marketCapMoreThan': market_cap_more_than,
@@ -114,7 +131,7 @@ async def calculate_fluctuations(ticker: str, period: str = '6mo'):
 
 async def fetch_quote_data_async(symbol, session):
     logger.info(f"Fetching quote data asynchronously for {symbol}")
-    url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={settings.API_KEY}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/quote/{symbol}?apikey={settings.API_KEY}"
     async with session.get(url) as response:
         data = await response.json()
         logger.info(f"Retrieved quote data for {symbol}")
@@ -132,7 +149,7 @@ async def fetch_all_quotes(symbols: list):
 @router.get("/price_eps")
 async def fetch_price_and_eps(symbol: str):
     logger.info(f"Fetching price and EPS for {symbol}")
-    url = f"https://financialmodelingprep.com/stable/"
+    url = f"{settings.FMP_BASE_URL}/stable/"
     params = {
     "apikey": settings.API_KEY,
     "symbol": symbol
@@ -199,7 +216,7 @@ async def get_top_gainers():
     
     :return: 상위 상승 주식 데이터
     """
-    url = "https://financialmodelingprep.com/stable/biggest-gainers"
+    url = f"{settings.FMP_BASE_URL}/stable/biggest-gainers"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -222,7 +239,7 @@ async def get_biggest_losers():
     
     :return: 상위 하락 주식 데이터
     """
-    url = "https://financialmodelingprep.com/stable/biggest-losers"
+    url = f"{settings.FMP_BASE_URL}/stable/biggest-losers"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -245,7 +262,7 @@ async def get_highest_volume():
     
     :return: 거래량 상위 주식 데이터
     """
-    url = "https://financialmodelingprep.com/stable/most-actives"
+    url = f"{settings.FMP_BASE_URL}/stable/most-actives"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -268,7 +285,7 @@ async def get_stock_quote(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 주식 시세 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/quote/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -291,7 +308,7 @@ async def get_sectors_performance():
     
     :return: 섹터 성과 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/sectors-performance"
+    url = f"{settings.FMP_BASE_URL}/api/v3/sectors-performance"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -328,7 +345,7 @@ async def get_technical_indicator(interval: str, indicator: str, symbol: str, pe
     if indicator not in valid_indicators:
         raise HTTPException(status_code=400, detail=f"유효하지 않은 기술적 지표입니다. 사용 가능: {valid_indicators}")
 
-    url = f"https://financialmodelingprep.com/api/v3/technical_indicator/{interval}/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/technical_indicator/{interval}/{symbol}"
     params = {"type": indicator, "period": period, "apikey": settings.API_KEY}
 
     try:
@@ -361,7 +378,7 @@ async def get_intraday_chart(symbol: str, interval: str, from_date: str, to_date
     if interval not in valid_intervals:
         raise HTTPException(status_code=400, detail=f"유효하지 않은 시간 간격입니다. 사용 가능: {valid_intervals}")
 
-    url = f"https://financialmodelingprep.com/api/v3/historical-chart/{interval}/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/historical-chart/{interval}/{symbol}"
     params = {
         "from": from_date,
         "to": to_date,
@@ -392,7 +409,7 @@ async def get_daily_chart(symbol: str, from_date: Optional[str] = None, to_date:
     :param to_date: 조회 종료 날짜 (선택, YYYY-MM-DD 형식)
     :return: 일일 차트 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/historical-price-full/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     if from_date:
@@ -423,7 +440,7 @@ async def get_press_releases(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 보도 자료 데이터 리스트
     """
-    url = f"https://financialmodelingprep.com/api/v3/press-releases/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/press-releases/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -450,7 +467,7 @@ async def get_stock_news(tickers: str, from_date: Optional[str] = None, to_date:
     :param page: 페이지 번호 (기본값: 1)
     :return: 주식 뉴스 데이터 리스트
     """
-    url = "https://financialmodelingprep.com/api/v3/stock_news"
+    url = f"{settings.FMP_BASE_URL}/api/v3/stock_news"
     params = {"tickers": tickers, "page": page, "apikey": settings.API_KEY}
 
     if from_date:
@@ -479,7 +496,7 @@ async def get_full_quote(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 전체 시세 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/quote/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -503,7 +520,7 @@ async def get_quote_order(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 현재 가격, 거래량, 마지막 거래 가격
     """
-    url = f"https://financialmodelingprep.com/api/v3/quote-order/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/quote-order/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -527,7 +544,7 @@ async def get_simple_quote(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 가격, 변화량, 거래량 등의 기본 시세 정보
     """
-    url = f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/quote-short/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -551,7 +568,7 @@ async def get_live_full_price(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 실시간 입찰가, 매도가, 거래량, 마지막 거래 가격
     """
-    url = f"https://financialmodelingprep.com/api/v3/stock/full/real-time-price/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/stock/full/real-time-price/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -568,14 +585,10 @@ async def get_live_full_price(symbol: str):
 
 
 ### 📌 기업 정보 관련 API
-
 @router.get("/company/profile/{symbol}")
 async def get_company_profile(symbol: str):
-    url = f"https://financialmodelingprep.com/stable/profile"
-    params = {
-        "apikey": settings.API_KEY,
-        "symbol": symbol
-              }
+    url = f"{settings.FMP_BASE_URL}/stable/profile"
+    params = {"symbol": symbol, "apikey": settings.API_KEY}
     return await call_api_async(url, params)
 
 @router.get("/company/screener")
@@ -605,7 +618,7 @@ async def get_stock_screener(
     
     :return: 필터링된 주식 목록
     """
-    url = "https://financialmodelingprep.com/stable/company-screener"
+    url = f"{settings.FMP_BASE_URL}/stable/company-screener"
     params = {
         'apikey': settings.API_KEY,
         'marketCapMoreThan': market_cap_more_than,
@@ -651,7 +664,7 @@ async def get_stock_grade(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 애널리스트 평가 정보
     """
-    url = f"https://financialmodelingprep.com/api/v3/grade/{symbol}?apikey=ywVLzlNZQUBe3anS60CetWk2P1JXK2pO"
+    url = f"{settings.FMP_BASE_URL}/api/v3/grade/{symbol}?apikey=ywVLzlNZQUBe3anS60CetWk2P1JXK2pO"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -674,7 +687,7 @@ async def get_market_cap(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 시가총액 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v3/market-capitalization/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/market-capitalization/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -701,7 +714,7 @@ async def get_historical_market_cap(symbol: str, from_date: str, to_date: str, l
     :param limit: 최대 조회 개수 (기본값: 100)
     :return: 과거 시가총액 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v3/historical-market-capitalization/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/historical-market-capitalization/{symbol}"
     params = {
         "from": from_date,
         "to": to_date,
@@ -730,7 +743,7 @@ async def get_analyst_estimates(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 애널리스트 평가 정보
     """
-    url = f"https://financialmodelingprep.com/api/v3/analyst-estimates/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/analyst-estimates/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -754,7 +767,7 @@ async def get_analyst_recommendations(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 애널리스트 추천 정보
     """
-    url = f"https://financialmodelingprep.com/api/v3/analyst-stock-recommendations/{symbol}"
+    url = f"{settings.FMP_BASE_URL}/api/v3/analyst-stock-recommendations/{symbol}"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -776,7 +789,7 @@ def get_company_logo(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 회사 로고 URL
     """
-    url = f"https://financialmodelingprep.com/image-stock/{symbol}.png"
+    url = f"{settings.FMP_BASE_URL}/image-stock/{symbol}.png"
     return {"logo_url": url}
 
 @router.get("/company/peers/{symbol}")
@@ -787,7 +800,7 @@ async def get_stock_peers(symbol: str):
     :param symbol: 주식 심볼 (예: AAPL)
     :return: 피어 그룹 데이터
     """
-    url = f"https://financialmodelingprep.com/api/v4/stock_peers"
+    url = f"{settings.FMP_BASE_URL}/api/v4/stock_peers"
     params = {"symbol": symbol, "apikey": settings.API_KEY}
 
     try:
@@ -809,7 +822,7 @@ async def get_available_sectors():
     
     :return: 섹터 목록 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/sectors-list"
+    url = f"{settings.FMP_BASE_URL}/api/v3/sectors-list"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -831,7 +844,7 @@ async def get_available_industries():
     
     :return: 산업 목록 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/industries-list"
+    url = f"{settings.FMP_BASE_URL}/api/v3/industries-list"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -853,7 +866,7 @@ async def get_market_index():
     
     :return: 시장 지수 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/quotes/index"
+    url = f"{settings.FMP_BASE_URL}/api/v3/quotes/index"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -876,7 +889,7 @@ async def get_sector_pe_ratio(date: str, exchange: str = "NYSE"):
     
     :return: 섹터별 PE 비율 데이터
     """
-    url = "https://financialmodelingprep.com/api/v4/sector_price_earning_ratio"
+    url = f"{settings.FMP_BASE_URL}/api/v4/sector_price_earning_ratio"
     params = {"date": date, "exchange": exchange, "apikey": settings.API_KEY}
 
     try:
@@ -901,7 +914,7 @@ async def get_industry_pe_ratio(date: str, exchange: str = "NYSE"):
     :param exchange: 거래소 (기본값: NYSE)
     :return: 산업별 PE 비율 데이터
     """
-    url = "https://financialmodelingprep.com/api/v4/industry_price_earning_ratio"
+    url = f"{settings.FMP_BASE_URL}/api/v4/industry_price_earning_ratio"
     params = {"date": date, "exchange": exchange, "apikey": settings.API_KEY}
 
     try:
@@ -923,7 +936,7 @@ async def get_sector_performance():
     
     :return: 섹터 성과 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/sectors-performance"
+    url = f"{settings.FMP_BASE_URL}/api/v3/sectors-performance"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -948,7 +961,7 @@ async def get_sector_historical_performance(from_date: str, to_date: str):
     :param to_date: 조회 종료 날짜 (YYYY-MM-DD 형식)
     :return: 섹터의 역사적 성과 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/historical-sectors-performance"
+    url = f"{settings.FMP_BASE_URL}/api/v3/historical-sectors-performance"
     params = {"from": from_date, "to": to_date, "apikey": settings.API_KEY}
 
     try:
@@ -971,7 +984,7 @@ async def get_sp500_constituents():
     
     :return: S&P 500 회사 목록
     """
-    url = "https://financialmodelingprep.com/api/v3/sp500_constituent"
+    url = f"{settings.FMP_BASE_URL}/api/v3/sp500_constituent"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -994,7 +1007,7 @@ async def get_nasdaq_constituents():
     
     :return: Nasdaq 회사 목록
     """
-    url = "https://financialmodelingprep.com/api/v3/nasdaq_constituent"
+    url = f"{settings.FMP_BASE_URL}/api/v3/nasdaq_constituent"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -1016,7 +1029,7 @@ async def get_dowjones_constituents():
     
     :return: Dow Jones 회사 목록
     """
-    url = "https://financialmodelingprep.com/api/v3/dowjones_constituent"
+    url = f"{settings.FMP_BASE_URL}/api/v3/dowjones_constituent"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -1042,7 +1055,7 @@ async def get_treasury_rates(from_date: str, to_date: str):
     :param to_date: 조회 종료 날짜 (YYYY-MM-DD 형식)
     :return: 국채 금리 데이터
     """
-    url = "https://financialmodelingprep.com/api/v4/treasury"
+    url = f"{settings.FMP_BASE_URL}/api/v4/treasury"
     params = {"from": from_date, "to": to_date, "apikey": settings.API_KEY}
 
     try:
@@ -1067,7 +1080,7 @@ async def get_economic_indicators(indicator_name: str, from_date: Optional[str] 
     :param to_date: 조회 종료 날짜 (선택, YYYY-MM-DD 형식)
     :return: 경제 지표 데이터
     """
-    url = "https://financialmodelingprep.com/api/v4/economic"
+    url = f"{settings.FMP_BASE_URL}/api/v4/economic"
     params = {"name": indicator_name, "apikey": settings.API_KEY}
 
     if from_date:
@@ -1096,7 +1109,7 @@ async def get_economic_calendar(from_date: str, to_date: str):
     :param to_date: 조회 종료 날짜 (YYYY-MM-DD 형식)
     :return: 경제 발표 일정 데이터
     """
-    url = "https://financialmodelingprep.com/api/v3/economic_calendar"
+    url = f"{settings.FMP_BASE_URL}/api/v3/economic_calendar"
     params = {"from": from_date, "to": to_date, "apikey": settings.API_KEY}
 
     try:
@@ -1118,7 +1131,7 @@ async def get_market_risk_premium():
     
     :return: 시장 위험 프리미엄 데이터
     """
-    url = "https://financialmodelingprep.com/api/v4/market_risk_premium"
+    url = f"{settings.FMP_BASE_URL}/api/v4/market_risk_premium"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -1142,7 +1155,7 @@ async def search_general(query: str):
     :param query: 검색어 (심볼 또는 회사 이름)
     :return: 검색 결과 리스트
     """
-    url = "https://financialmodelingprep.com/api/v3/search"
+    url = f"{settings.FMP_BASE_URL}/api/v3/search"
     params = {"query": query, "apikey": settings.API_KEY}
 
     try:
@@ -1168,7 +1181,7 @@ async def search_ticker(query: str, limit: int = 10, exchange: Optional[str] = N
     :param exchange: 거래소 (예: NASDAQ, NYSE)
     :return: 검색 결과 리스트
     """
-    url = "https://financialmodelingprep.com/api/v3/search-ticker"
+    url = f"{settings.FMP_BASE_URL}/api/v3/search-ticker"
     params = {"query": query, "limit": limit, "apikey": settings.API_KEY}
 
     if exchange:
@@ -1197,7 +1210,7 @@ async def search_name(query: str, limit: int = 10, exchange: Optional[str] = Non
     :param exchange: 거래소 (예: NASDAQ, NYSE)
     :return: 검색 결과 리스트
     """
-    url = "https://financialmodelingprep.com/api/v3/search-name"
+    url = f"{settings.FMP_BASE_URL}/api/v3/search-name"
     params = {"query": query, "limit": limit, "apikey": settings.API_KEY}
 
     if exchange:
@@ -1337,7 +1350,7 @@ async def get_commodities_list():
     
     :return: 원자재 목록
     """
-    url = "https://financialmodelingprep.com/stable/commodities-list"
+    url = f"{settings.FMP_BASE_URL}/stable/commodities-list"
     params = {"apikey": settings.API_KEY}
 
     try:
@@ -1359,7 +1372,7 @@ async def get_commodity_price_light(symbol: str):
     :param symbol: 원자재 심볼 (예: GCUSD - 금, CLUSD - 원유)
     :return: 원자재 가격 데이터 (Light Version)
     """
-    url = f"https://financialmodelingprep.com/stable/historical-price-eod/light"
+    url = f"{settings.FMP_BASE_URL}/stable/historical-price-eod/light"
     params = {"symbol": symbol, "apikey": settings.API_KEY}
 
     try:
@@ -1381,7 +1394,7 @@ async def get_commodity_price_full(symbol: str):
     :param symbol: 원자재 심볼 (예: GCUSD - 금, CLUSD - 원유)
     :return: 원자재 가격 데이터 (Full Version)
     """
-    url = f"https://financialmodelingprep.com/stable/historical-price-eod/full"
+    url = f"{settings.FMP_BASE_URL}/stable/historical-price-eod/full"
     params = {"symbol": symbol, "apikey": settings.API_KEY}
 
     try:
@@ -1404,7 +1417,7 @@ async def get_income_statement(symbol: str, period: str = "annual"):
     :param period: 데이터 조회 기간 ("annual" 또는 "quarterly", 기본값: "annual")
     :return: 손익계산서 데이터
     """
-    url = f"https://financialmodelingprep.com/stable/income-statement"
+    url = f"{settings.FMP_BASE_URL}/stable/income-statement"
     params = {
         "period": period,
         "symbol": symbol,
@@ -1432,22 +1445,18 @@ async def get_ratings_snapshot(symbol: str, limit: int = 1):
     :param limit: 조회할 데이터 개수 (기본값: 1)
     :return: 재무 평가 지표 데이터
     """
-    url = f"https://financialmodelingprep.com/stable/ratings-snapshot"
+    url = f"{settings.FMP_BASE_URL}/stable/ratings-snapshot"
     params = {
-        "limit": limit,
         "symbol": symbol,
+        "limit": 1,
         "apikey": settings.API_KEY
     }
-    try:
-        data = await call_api_async(url, params)
-        if not data:
-            raise HTTPException(status_code=404, detail=f"{symbol}의 재무 평가 데이터를 찾을 수 없습니다.")
-        return data
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Ratings Snapshot 조회 실패: {e}")
-        raise HTTPException(status_code=500, detail="Ratings Snapshot 데이터를 불러오는 중 오류가 발생했습니다.")
+    logger.info(f"📊 [get_ratings_snapshot] URL: {url}")
+    logger.info(f"📊 [get_ratings_snapshot] PARAMS: {params}")
+
+    data = await call_api_async(url, params=params, method="GET")
+    logger.info(f"📊 [get_ratings_snapshot] RESPONSE: {symbol} → {data[0] if data else 'No data'}")
+    return data
 
 @router.get("/sector-pe-snapshot")
 async def get_sector_pe_snapshot(date: str, exchange: Optional[str] = None, sector: Optional[str] = None):
@@ -1459,7 +1468,7 @@ async def get_sector_pe_snapshot(date: str, exchange: Optional[str] = None, sect
     :param sector: 특정 섹터 필터링 (예: "Technology")
     :return: 섹터 P/E 데이터
     """
-    url = "https://financialmodelingprep.com/stable/sector-pe-snapshot"
+    url = f"{settings.FMP_BASE_URL}/stable/sector-pe-snapshot"
     params = {
         "date": date,
         "apikey": settings.API_KEY
@@ -1490,7 +1499,7 @@ async def get_industry_pe_snapshot(date: str, exchange: Optional[str] = None, in
     :param industry: 특정 산업 필터링 (예: "Technology")
     :return: 산업 P/E 데이터
     """
-    url = "https://financialmodelingprep.com/stable/industry-pe-snapshot"
+    url = f"{settings.FMP_BASE_URL}/stable/industry-pe-snapshot"
     params = {
         "date": date,
         "apikey": settings.API_KEY
@@ -1520,7 +1529,7 @@ async def get_sector_performance_snapshot(date: str, exchange: Optional[str] = N
     :param sector: 특정 섹터 필터링 (예: "Technology")
     :return: 섹터 성과 데이터
     """
-    url = "https://financialmodelingprep.com/stable/sector-performance-snapshot"
+    url = f"{settings.FMP_BASE_URL}/stable/sector-performance-snapshot"
     params = {
         "date": date,
         "apikey": settings.API_KEY
@@ -1550,7 +1559,7 @@ async def get_industry_performance_snapshot(date: str, exchange: Optional[str] =
     :param industry: 특정 산업 필터링 (예: "Technology")
     :return: 산업 성과 데이터
     """
-    url = "https://financialmodelingprep.com/stable/industry-performance-snapshot"
+    url = f"{settings.FMP_BASE_URL}/stable/industry-performance-snapshot"
     params = {
         "date": date,
         "apikey": settings.API_KEY
@@ -1569,3 +1578,404 @@ async def get_industry_performance_snapshot(date: str, exchange: Optional[str] =
     except Exception as e:
         logger.error(f"Industry Performance Snapshot 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="Industry Performance 데이터를 불러오는 중 오류가 발생했습니다.")
+
+@router.get("/company/ratios/{symbol}")
+async def get_ratios_ttm(symbol: str):
+    """
+    특정 주식의 TTM 기준 주요 재무 비율 지표를 조회합니다.
+    
+    :param symbol: 주식 심볼 (예: AAPL)
+    :return: TTM 기준 재무 비율 리스트
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/ratios-ttm"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+    logger.info(f"📊 [get_ratios_ttm] URL: {url}")
+    logger.info(f"📊 [get_ratios_ttm] PARAMS: {params}")
+
+    data = await call_api_async(url, params=params, method="GET")
+    logger.info(f"📊 [get_ratios_ttm] RESPONSE: {symbol} → {data[0] if data else 'No data'}")
+    return data
+
+@router.get("/company/key-metrics-ttm/{symbol}")
+async def get_key_metrics_ttm(symbol: str):
+    """
+    TTM Key Metrics API를 사용하여 포괄적인 후행 12개월(TTM) 핵심 성과 지표 세트를 검색합니다. 
+    회사의 수익성, 자본 효율성 및 유동성과 관련된 데이터에 액세스하여 지난 한 해 동안의 재무 건전성을 자세히 분석할 수 있습니다.
+    
+    :param symbol: 주식 심볼 (예: AAPL)
+    :return: TTM 기준 재무 비율 리스트
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/key-metrics-ttm"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+    logger.info(f"📊 [get_key_metrics_ttm] URL: {url}")
+    logger.info(f"📊 [get_key_metrics_ttm] PARAMS: {params}")
+
+    data = await call_api_async(url, params=params, method="GET")
+    logger.info(f"📊 [get_key_metrics_ttm] RESPONSE: {symbol} → {data[0] if data else 'No data'}")
+    return data
+    
+@router.get("/company/dcf/{symbol}")
+async def get_dcf_valuation(symbol: str):
+    """
+    특정 주식의 DCF(Discounted Cash Flow) 평가 데이터를 조회합니다.
+
+    :param symbol: 주식 심볼 (예: AAPL)
+    :return: DCF 평가 결과 (예: 현재 주가 대비 이론 가치)
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/discounted-cash-flow"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"{symbol}의 DCF 데이터를 찾을 수 없습니다.")
+        return data
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"DCF 데이터 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="DCF 데이터를 불러오는 중 오류가 발생했습니다.")
+
+@router.get("/company/custom_dcf/{symbol}")
+async def get_custom_dcf_valuation(symbol: str) -> list[dict]:
+    """
+    대체 DCF API 호출 (사용자 정의 파라미터 기반)
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/custom-discounted-cash-flow"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+    
+    data = await call_api_async(url, params)
+    if isinstance(data, list) and data:
+        logger.info(f"📊 [get_custom_dcf_valuation] RESPONSE: {symbol} → {data[-1]}")
+    elif "error" in str(data):
+        logger.warning(f"❌ [get_custom_dcf_valuation] ERROR for {symbol} → {data}")
+    else:
+        logger.warning(f"⚠️ [get_custom_dcf_valuation] No data for {symbol}")
+    return data
+
+@router.get("/company/FinancialScores/{symbol}")
+async def get_financial_scores(symbol: str) -> dict:
+    """
+    대체 DCF API 호출 (사용자 정의 파라미터 기반)
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/financial-scores"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+    
+    data = await call_api_async(url, params)
+    if isinstance(data, list) and data:
+        logger.info(f"📊 [get_financial_scores] RESPONSE: {symbol} → {data[-1]}")
+    elif "error" in str(data):
+        logger.warning(f"❌ [get_financial_scores] ERROR for {symbol} → {data}")
+    else:
+        logger.warning(f"⚠️ [get_financial_scores] No data for {symbol}")
+    return data
+
+async def fetch_fmp_data(symbol: str) -> dict:
+    try:
+        # ✅ 병렬로 API 호출
+        profile, ratios, key_metrics_ttm , dcf_data, ratings, scores = await asyncio.gather(
+            get_company_profile(symbol),
+            get_ratios_ttm(symbol),
+            get_key_metrics_ttm(symbol),
+            get_custom_dcf_valuation(symbol),  # 새 API
+            get_ratings_snapshot(symbol),
+            get_financial_scores(symbol)
+        )
+
+        # ✅ dcf_data 가 연도별 리스트로 들어온 경우 가장 최신 연도 선택
+        dcf_sorted = sorted(dcf_data, key=lambda x: str(x.get("year", "0000")))
+        dcf_latest = dcf_sorted[-1] if dcf_sorted else {}
+        image_path = f"../../img/{symbol}"
+        visualize_dcf_time_series(dcf_data, symbol, image_path)
+        dcf_value = dcf_latest.get("equityValuePerShare", 0)
+
+        return {
+            "symbol": symbol,
+            "profile": profile[0] if profile else {},
+            "ratios": ratios[0] if ratios else {},
+            "key_metrics_ttm": key_metrics_ttm[0] if key_metrics_ttm else {},
+            "dcf": dcf_data [0] if dcf_data else {},
+            "ratings": ratings[0] if ratings else {},
+            "scores": scores[0] if scores else {},
+            "dcf_value": dcf_value,
+            "image_path": image_path,
+        }
+
+    except Exception as e:
+        logger.error(f"[fetch_fmp_data] {symbol} 실패: {e}")
+        return {"symbol": symbol, "error": str(e)}
+
+def generate_prompt(data: dict) -> str:
+    profile = data.get("profile", {})
+    ratios = data.get("ratios", {})
+    dcf = data.get("dcf", {})
+    key_metrics_ttm = data.get("key_metrics_ttm", {})
+
+    name = profile.get('companyName', '기업명 미확인')
+    price = profile.get('price', 0)
+
+    roe = round(key_metrics_ttm.get('returnOnEquityTTM', 0) * 100, 2)
+    per = round(ratios.get('priceToEarningsRatioTTM', 0), 2)
+    div = round(ratios.get('dividendYieldTTM', 0) * 100, 2)
+    debt = round(ratios.get('debtToAssetsRatioTTM', 0) * 100, 2)
+
+    dcf_value = dcf.get("equityValuePerShare", 0)
+    dcf_gap = round((dcf_value - price) / price * 100, 2) if price else 0
+
+    wacc = dcf.get("wacc", None)
+    longTermGrowthRate = dcf.get("longTermGrowthRate", None)
+    longTermGrowthRate = dcf.get("longTermGrowthRate", None)
+    terminal = dcf.get("terminalValue", None)
+
+    prompt = f"""
+📊 [{name}]의 재무 정보 요약:
+
+- 현재 주가: ${price}
+- PER: {per}
+- ROE: {roe}%
+- 배당수익률: {div}%
+- 부채비율 (자산 대비): {debt}%
+- WACC는 {wacc}%, 장기 성장률은 {longTermGrowthRate}%로 설정되었으며, DCF 기준 주당 가치: ${dcf_value} ({'저평가' if dcf_gap > 0 else '고평가'}) 입니다.
+"""
+
+    if wacc:
+        prompt += f"- 할인율(WACC): {wacc}% "
+    if terminal:
+        prompt += f"- 최종기말가치(Terminal Value): {terminal:,} "
+
+    prompt += " 이 데이터를 바탕으로 투자 매력도 분석 요약을 작성해 주세요."
+
+    return prompt.strip()
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+async def gpt_analyze(data: dict) -> str:
+    prompt = generate_prompt(data)
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",  # 필요시 gpt-4로 변경 가능
+            messages=[
+                {"role": "system", "content": "당신은 최고에 금융 증권 전문가입니다."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        logger.error(f"[gpt_analyze] GPT 분석 실패: {e}")
+        return "GPT 분석에 실패했습니다."
+
+def score_stock(data: dict) -> int:
+    score = 0
+
+    profile = data.get("profile", {})
+    ratios = data.get("ratios", {})
+    dcf = data.get("dcf", {})
+    key_metrics_ttm = data.get("key_metrics_ttm", {})
+    scores = data.get("scores", {})
+
+    roe = key_metrics_ttm.get("returnOnEquityTTM", 0)
+    dividend = ratios.get("dividendYieldTTM", 0)
+    debt_ratio = ratios.get("debtToAssetsRatioTTM", 0)
+    price = profile.get("price", 0)
+    dcf_value = dcf.get("equityValuePerShare", 0)
+    piotroskiScore = scores.get("piotroskiScore", 0)
+    altmanZScore = scores.get("altmanZScore", 0)
+
+    # ROE 점수
+    if roe >= 0.15:
+        score += 2
+    elif roe >= 0.1:
+        score += 1
+
+    # 배당수익률 점수
+    if dividend >= 0.03:
+        score += 2
+    elif dividend >= 0.015:
+        score += 1
+
+    # 부채비율 점수 (자산 대비)
+    if debt_ratio <= 0.3:
+        score += 2
+    elif debt_ratio <= 0.5:
+        score += 1
+
+    # DCF 저평가 여부
+    dcf_gap = ((dcf_value - price) / price) if price else 0
+    if dcf_gap >= 0.2:
+        score += 2
+    elif dcf_gap >= 0.1:
+        score += 1
+        
+    # Piotroski Score (예: 8 이상이면 우량)
+    if piotroskiScore >= 8:
+        score += 1
+
+    # Altman Z-Score (예: 3 이상이면 안정적)
+    if altmanZScore >= 3:
+        score += 1
+
+    return score
+
+async def get_stock_screener_list(filters: dict) -> list[str]:
+    url = f"{settings.FMP_BASE_URL}/stable/company-screener"
+    
+    # bool 처리
+    for key in ["isEtf", "isFund", "isActivelyTrading"]:
+        if key in filters:
+            filters[key] = str(filters[key]).lower()
+
+    filters["apikey"] = settings.API_KEY
+
+    data = await call_api_async(url, filters)
+    return [item["symbol"] for item in data if "symbol" in item]
+
+def visualize_dcf_time_series(dcf_list: list[dict], symbol: str, save_path: str = "../../img/dcf_chart.png"):
+    years = []
+    equity_values = []
+    waccs = []
+    terminal_values = []
+
+    for item in dcf_list:
+        if not item.get("year"):
+            continue
+        years.append(str(item["year"]))
+        equity_values.append(item.get("equityValuePerShare", 0))
+        waccs.append(item.get("wacc", 0))
+        terminal_values.append(item.get("terminalValue", 0))
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    ax1.plot(years, equity_values, marker='o', label="Equity/Share ($)")
+    ax1.plot(years, terminal_values, marker='s', label="Terminal Value", linestyle='--')
+    ax1.set_ylabel("Value ($)")
+    ax1.set_title(f"{symbol} DCF 시계열")
+    ax1.grid(True, linestyle="--", alpha=0.5)
+
+    ax2 = ax1.twinx()
+    ax2.plot(years, waccs, color='gray', marker='x', label="WACC (%)")
+    ax2.set_ylabel("WACC (%)")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+    
+def format_telegram_message(result: dict) -> str:
+    symbol = result["symbol"]
+    score = result["score"]
+    dcf = result.get("dcf_value", "N/A")
+    price = result.get("current_price", "N/A")
+    summary = result.get("summary", "")
+
+    return f"""
+📈 {symbol} 분석 결과*
+점수: {score}
+현재 주가: ${price}
+DCF 가치: ${dcf}
+
+{summary}
+""".strip()
+    
+async def notify_telegram(message: str, image_path: str = None):
+    if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
+        logger.warning("TELEGRAM 설정이 누락되어 알림 전송 생략")
+        return
+
+    # 1. 메시지 전송
+    url_msg = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": settings.TELEGRAM_CHAT_ID, "text": message}
+    async with aiohttp.ClientSession() as session:
+        try:
+            await session.post(url_msg, json=payload)
+            logger.info("📬 Telegram 메시지 전송 완료")
+        except Exception as e:
+            logger.error(f"Telegram 메시지 전송 실패: {e}")
+
+    # 2. 이미지 전송 (선택)
+    if image_path and os.path.exists(image_path):
+        url_photo = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendPhoto"
+        data = {"chat_id": settings.TELEGRAM_CHAT_ID}
+        with open(image_path, "rb") as photo:
+            try:
+                async with session.post(url_photo, data=data, files={"photo": photo}) as response:
+                    logger.info(f"📸 Telegram 이미지 전송 완료: {response.status}")
+            except Exception as e:
+                logger.error(f"Telegram 이미지 전송 실패: {e}")
+
+    
+@router.get("/analysis/pipeline")
+async def run_pipeline():
+    # 1. 스크리너 필터링: 기술주 + 시가총액 100억 이상 + 배당 2% 이상
+    filters = {
+        "marketCapMoreThan": 0,
+        "marketCapLowerThan": 1007331704681,
+        "dividendMoreThan": 0.02,
+        "isEtf": "false",
+        "isFund": "false",
+        "isActivelyTrading": "true",
+        "country": "US",
+        "sector": "Technology",
+        "limit": 1
+    }
+
+    symbols = await get_stock_screener_list(filters)
+
+    # 2. 재무 데이터 수집
+    #tasks = [fetch_fmp_data(sym) for sym in symbols]
+    tasks = [fetch_fmp_data(sym) for sym in symbols]
+    all_data = await asyncio.gather(*tasks)
+    
+    # 3. GPT 분석 (또는 점수 계산)
+    results = []
+    for data in all_data:
+        if "error" in data:
+            logger.warning(f"⚠️ 데이터 오류: {data}")
+            continue
+
+        try:
+            score = score_stock(data)
+            summary = await gpt_analyze(data)
+
+            result = {
+                "symbol": data["symbol"],
+                "score": score,
+                "summary": summary,
+                "dcf_value": data.get("dcf_value", 0),
+                "current_price": data.get("profile", {}).get("price", 0),
+            }
+            results.append(result)
+            # ✅ 텔레그램 전송
+            message = format_telegram_message(result)
+            await notify_telegram(message, image_path=data.get("image_path"))          
+        except Exception as e:
+            logger.error(f"GPT 분석 실패: {data['symbol']} - {e}")
+            results.append({
+                "symbol": data["symbol"],
+                "score": None,
+                "summary": "분석 실패",
+                "error": str(e)
+            })
+    return {"count": len(results), "results": results}
