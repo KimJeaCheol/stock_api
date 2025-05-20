@@ -6,13 +6,17 @@ import os
 from typing import Any, List, Optional, Union
 
 import aiohttp
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import valinvest
 import yfinance as yf
+from aiohttp import FormData
 from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from openai import OpenAI
+from telegram import Bot
+from telegram.error import TelegramError
 
 from app.core.config import load_strategy, save_strategy, settings
 from app.core.logging import logger  # 이미 설정된 logger import
@@ -21,6 +25,9 @@ from app.tasks.tasks import (analyze_candlestick_patterns, analyze_trend,
                              manage_risk)
 
 router = APIRouter()
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+IMG_DIR = os.path.abspath(os.path.join(BASE_DIR, "../../img"))
+matplotlib.set_loglevel("warning")  # 또는 "error"
 
 async def call_api_async(url: str, params: dict = {}, method: str = "GET", json_data: dict = None , timeout: int = 10):
     logger.info(f"📡 API 요청 시작: {method} {url}")
@@ -1579,7 +1586,7 @@ async def get_industry_performance_snapshot(date: str, exchange: Optional[str] =
         logger.error(f"Industry Performance Snapshot 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="Industry Performance 데이터를 불러오는 중 오류가 발생했습니다.")
 
-@router.get("/company/ratios/{symbol}")
+@router.get("/company/ratiosttm/{symbol}")
 async def get_ratios_ttm(symbol: str):
     """
     특정 주식의 TTM 기준 주요 재무 비율 지표를 조회합니다.
@@ -1597,6 +1604,26 @@ async def get_ratios_ttm(symbol: str):
 
     data = await call_api_async(url, params=params, method="GET")
     logger.info(f"📊 [get_ratios_ttm] RESPONSE: {symbol} → {data[0] if data else 'No data'}")
+    return data
+
+@router.get("/company/ratios/{symbol}")
+async def get_ratios(symbol: str):
+    """
+    특정 주식의 TTM 기준 주요 재무 비율 지표를 조회합니다.
+    
+    :param symbol: 주식 심볼 (예: AAPL)
+    :return: TTM 기준 재무 비율 리스트
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/ratios"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+    logger.info(f"📊 [get_ratios] URL: {url}")
+    logger.info(f"📊 [get_ratios] PARAMS: {params}")
+
+    data = await call_api_async(url, params=params, method="GET")
+    logger.info(f"📊 [get_ratios] RESPONSE: {symbol} → {data[0] if data else 'No data'}")
     return data
 
 @router.get("/company/key-metrics-ttm/{symbol}")
@@ -1619,6 +1646,58 @@ async def get_key_metrics_ttm(symbol: str):
     data = await call_api_async(url, params=params, method="GET")
     logger.info(f"📊 [get_key_metrics_ttm] RESPONSE: {symbol} → {data[0] if data else 'No data'}")
     return data
+    
+@router.get("/company/balance-sheet-statement/{symbol}")
+async def get_balance_sheet_statement(symbol: str):
+    """
+    특정 주식의 대차대조표 데이터를 조회합니다.
+
+    :param symbol: 주식 심볼 (예: AAPL)
+    :return: 대차대조표 데이터
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/balance-sheet-statement"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"{symbol}의 대차대조표 데이터를 찾을 수 없습니다.")
+        return data
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"대차대조표 데이터 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="DCF 데이터를 불러오는 중 오류가 발생했습니다.")
+    
+@router.get("/company/cash-flow-statement/{symbol}")
+async def get_cash_flow_statement(symbol: str):
+    """
+    특정 주식의 현금 흐름표 데이터를 조회합니다.
+
+    :param symbol: 주식 심볼 (예: AAPL)
+    :return: 현금 흐름표 데이터
+    """
+    url = f"{settings.FMP_BASE_URL}/stable/cash-flow-statement"
+    params = {
+        "symbol": symbol,
+        "apikey": settings.API_KEY
+    }
+
+    try:
+        data = await call_api_async(url, params)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"{symbol}의 DCF 데이터를 찾을 수 없습니다.")
+        return data
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"DCF 데이터 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="DCF 데이터를 불러오는 중 오류가 발생했습니다.")
     
 @router.get("/company/dcf/{symbol}")
 async def get_dcf_valuation(symbol: str):
@@ -1688,91 +1767,152 @@ async def get_financial_scores(symbol: str) -> dict:
 
 async def fetch_fmp_data(symbol: str) -> dict:
     try:
-        # ✅ 병렬로 API 호출
-        profile, ratios, key_metrics_ttm , dcf_data, ratings, scores = await asyncio.gather(
-            get_company_profile(symbol),
-            get_ratios_ttm(symbol),
-            get_key_metrics_ttm(symbol),
-            get_custom_dcf_valuation(symbol),  # 새 API
-            get_ratings_snapshot(symbol),
-            get_financial_scores(symbol)
+        # 📡 비동기 API 호출 준비
+        profile_task = get_company_profile(symbol)
+        ratios_ttm_task = get_ratios_ttm(symbol)
+        ratios_task = get_ratios(symbol)
+        key_metrics_ttm_task = get_key_metrics_ttm(symbol)
+        dcf_task = get_custom_dcf_valuation(symbol)
+        ratings_task = get_ratings_snapshot(symbol)
+        scores_task = get_financial_scores(symbol)
+        income_task = get_income_statement(symbol)
+        cashflow_task = get_cash_flow_statement(symbol)
+        balance_task = get_balance_sheet_statement(symbol)
+
+        # 🧠 병렬 실행
+        (
+            profile,
+            ratios_ttm,
+            ratios,
+            key_metrics_ttm,
+            dcf_data,
+            ratings,
+            scores,
+            income_statement,
+            cash_flow,
+            balance_sheet
+        ) = await asyncio.gather(
+            profile_task,
+            ratios_ttm_task,
+            ratios_task,
+            key_metrics_ttm_task,
+            dcf_task,
+            ratings_task,
+            scores_task,
+            income_task,
+            cashflow_task,
+            balance_task
         )
 
-        # ✅ dcf_data 가 연도별 리스트로 들어온 경우 가장 최신 연도 선택
+        # ✅ DCF 데이터 중 최신 연도 추출
         dcf_sorted = sorted(dcf_data, key=lambda x: str(x.get("year", "0000")))
         dcf_latest = dcf_sorted[-1] if dcf_sorted else {}
-        image_path = f"../../img/{symbol}"
-        visualize_dcf_time_series(dcf_data, symbol, image_path)
         dcf_value = dcf_latest.get("equityValuePerShare", 0)
 
+        # ✅ 차트 이미지 저장
+        save_path = os.path.join(IMG_DIR, f"{symbol}.png")
+        visualize_dcf_time_series(dcf_data, symbol, save_path)
+
+        # 📦 통합 데이터 반환
         return {
             "symbol": symbol,
             "profile": profile[0] if profile else {},
+            "ratios_ttm": ratios_ttm[0] if ratios_ttm else {},
             "ratios": ratios[0] if ratios else {},
             "key_metrics_ttm": key_metrics_ttm[0] if key_metrics_ttm else {},
-            "dcf": dcf_data [0] if dcf_data else {},
+            "dcf": dcf_latest,
             "ratings": ratings[0] if ratings else {},
             "scores": scores[0] if scores else {},
+            "income_statement": income_statement[0] if income_statement else {},
+            "cash_flow": cash_flow[0] if cash_flow else {},
+            "balance_sheet": balance_sheet[0] if balance_sheet else {},
             "dcf_value": dcf_value,
-            "image_path": image_path,
+            "save_path": save_path,
         }
 
     except Exception as e:
         logger.error(f"[fetch_fmp_data] {symbol} 실패: {e}")
         return {"symbol": symbol, "error": str(e)}
 
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
 def generate_prompt(data: dict) -> str:
     profile = data.get("profile", {})
     ratios = data.get("ratios", {})
+    ratios_ttm = data.get("ratios_ttm", {})
     dcf = data.get("dcf", {})
-    key_metrics_ttm = data.get("key_metrics_ttm", {})
+    key_metrics = data.get("key_metrics_ttm", {})
+    income = data.get("income_statement", {})
+    cash = data.get("cash_flow", {})
+    balance = data.get("balance_sheet", {})
 
-    name = profile.get('companyName', '기업명 미확인')
-    price = profile.get('price', 0)
+    name = profile.get("companyName", "기업명 미확인")
+    price = profile.get("price", 0)
 
-    roe = round(key_metrics_ttm.get('returnOnEquityTTM', 0) * 100, 2)
-    per = round(ratios.get('priceToEarningsRatioTTM', 0), 2)
-    div = round(ratios.get('dividendYieldTTM', 0) * 100, 2)
-    debt = round(ratios.get('debtToAssetsRatioTTM', 0) * 100, 2)
+    # 📊 실적 정보
+    revenue = income.get("revenue", 0)
+    net_income = income.get("netIncome", 0)
+    eps = income.get("eps", 0)
+
+    # 📈 수익성
+    gross_margin = round(ratios_ttm.get("grossProfitMarginTTM", 0) * 100, 2)
+    op_margin = round(ratios_ttm.get("operatingProfitMarginTTM", 0) * 100, 2)
+    net_margin = round(ratios_ttm.get("netProfitMarginTTM", 0) * 100, 2)
+
+    roe = round(key_metrics.get("returnOnEquityTTM", 0) * 100, 2)
+    roic = round(key_metrics.get("returnOnInvestedCapitalTTM", 0) * 100, 2)
+
+    # 📉 재무 건전성
+    debt_equity = round(ratios_ttm.get("debtToEquityRatioTTM", 0), 2)
+    current_ratio = round(ratios_ttm.get("currentRatioTTM", 0), 2)
+
+    # 💵 현금흐름
+    fcf = cash.get("freeCashFlow", 0)
+    ocf = cash.get("operatingCashFlow", 0)
+    capex = abs(cash.get("capitalExpenditure", 0))
+    capex_ratio = round((capex / ocf) * 100, 2) if ocf else 0
+
+    # 💰 주주환원
+    dividend_yield = round(ratios_ttm.get("dividendYieldTTM", 0) * 100, 2)
+    dividend_payout = round(ratios_ttm.get("dividendPayoutRatioTTM", 0) * 100, 2)
+
+    # 🧮 가치 평가
+    per = round(ratios_ttm.get("priceToEarningsRatioTTM", 0), 2)
+    pbr = round(ratios_ttm.get("priceToBookRatioTTM", 0), 2)
+    ev_ebitda = round(ratios_ttm.get("enterpriseValueMultipleTTM", 0), 2)
 
     dcf_value = dcf.get("equityValuePerShare", 0)
     dcf_gap = round((dcf_value - price) / price * 100, 2) if price else 0
-
     wacc = dcf.get("wacc", None)
-    longTermGrowthRate = dcf.get("longTermGrowthRate", None)
-    longTermGrowthRate = dcf.get("longTermGrowthRate", None)
     terminal = dcf.get("terminalValue", None)
 
+    # 📝 프롬프트 구성
     prompt = f"""
-📊 [{name}]의 재무 정보 요약:
+📊 [{name}]의 재무 요약:
 
-- 현재 주가: ${price}
-- PER: {per}
-- ROE: {roe}%
-- 배당수익률: {div}%
-- 부채비율 (자산 대비): {debt}%
-- WACC는 {wacc}%, 장기 성장률은 {longTermGrowthRate}%로 설정되었으며, DCF 기준 주당 가치: ${dcf_value} ({'저평가' if dcf_gap > 0 else '고평가'}) 입니다.
-"""
+- 현재 주가: ${price} / EPS: ${eps}
+- 매출: ${revenue:,} / 순이익: ${net_income:,} / 순이익률: {net_margin}%
+- PER: {per} / PBR: {pbr} / EV/EBITDA: {ev_ebitda}
+- ROE: {roe}%, ROIC: {roic}% / 영업이익률: {op_margin}%, 매출총이익률: {gross_margin}%
+- 유동비율: {current_ratio}, 부채비율: {debt_equity}
+- OCF: ${ocf:,} / FCF: ${fcf:,} / CapEx 비율: {capex_ratio}%
+- 배당수익률: {dividend_yield}%, 배당성향: {dividend_payout}%
+- DCF 가치: ${dcf_value} → 현재 주가 대비 {'저평가' if dcf_gap > 0 else '고평가'}
+- 할인율(WACC): {wacc}%, Terminal Value: ${terminal:,}
 
-    if wacc:
-        prompt += f"- 할인율(WACC): {wacc}% "
-    if terminal:
-        prompt += f"- 최종기말가치(Terminal Value): {terminal:,} "
+이 정보를 바탕으로 [전문가의 시각으로 투자 매력도를 요약]해 주세요.
+""".strip()
 
-    prompt += " 이 데이터를 바탕으로 투자 매력도 분석 요약을 작성해 주세요."
-
-    return prompt.strip()
-
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    return prompt
 
 async def gpt_analyze(data: dict) -> str:
     prompt = generate_prompt(data)
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # 필요시 gpt-4로 변경 가능
+            model="gpt-4o",  # 또는 gpt-3.5-turbo
             messages=[
-                {"role": "system", "content": "당신은 최고에 금융 증권 전문가입니다."},
+                {"role": "system", "content": "당신은 뛰어난 금융 전문가이며, 주식 투자 매력도를 심도있게 분석합니다."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.5
@@ -1788,53 +1928,84 @@ def score_stock(data: dict) -> int:
     score = 0
 
     profile = data.get("profile", {})
-    ratios = data.get("ratios", {})
+    ratios = data.get("ratios_ttm", {})
+    key_metrics = data.get("key_metrics_ttm", {})
     dcf = data.get("dcf", {})
-    key_metrics_ttm = data.get("key_metrics_ttm", {})
-    scores = data.get("scores", {})
+    scores_data = data.get("scores", {})
+    income = data.get("income_statement", {})
+    cash = data.get("cash_flow", {})
 
-    roe = key_metrics_ttm.get("returnOnEquityTTM", 0)
-    dividend = ratios.get("dividendYieldTTM", 0)
-    debt_ratio = ratios.get("debtToAssetsRatioTTM", 0)
     price = profile.get("price", 0)
     dcf_value = dcf.get("equityValuePerShare", 0)
-    piotroskiScore = scores.get("piotroskiScore", 0)
-    altmanZScore = scores.get("altmanZScore", 0)
+    dcf_gap = ((dcf_value - price) / price) if price else 0
 
-    # ROE 점수
-    if roe >= 0.15:
+    roe = key_metrics.get("returnOnEquityTTM", 0)
+    roic = key_metrics.get("returnOnInvestedCapitalTTM", 0)
+    fcf = cash.get("freeCashFlow", 0)
+    ocf = cash.get("operatingCashFlow", 0)
+    capex = abs(cash.get("capitalExpenditure", 0))
+    capex_ratio = (capex / ocf) if ocf else 0
+
+    current_ratio = ratios.get("currentRatioTTM", 0)
+    debt_to_equity = ratios.get("debtToEquityRatioTTM", 0)
+    net_margin = ratios.get("netProfitMarginTTM", 0)
+    dividend_yield = ratios.get("dividendYieldTTM", 0)
+    per = ratios.get("priceToEarningsRatioTTM", 0)
+
+    piotroski = scores_data.get("piotroskiScore", 0)
+    altman_z = scores_data.get("altmanZScore", 0)
+
+    # ✅ 1. 수익성 (최대 4점)
+    if roe >= 0.2:
         score += 2
     elif roe >= 0.1:
         score += 1
 
-    # 배당수익률 점수
-    if dividend >= 0.03:
+    if roic >= 0.15:
         score += 2
-    elif dividend >= 0.015:
+    elif roic >= 0.1:
         score += 1
 
-    # 부채비율 점수 (자산 대비)
-    if debt_ratio <= 0.3:
-        score += 2
-    elif debt_ratio <= 0.5:
+    # ✅ 2. 현금흐름과 재투자 (최대 3점)
+    if fcf > 0:
+        score += 1
+    if capex_ratio <= 0.3:
+        score += 1
+    if ocf > 0 and fcf / ocf >= 0.7:
         score += 1
 
-    # DCF 저평가 여부
-    dcf_gap = ((dcf_value - price) / price) if price else 0
+    # ✅ 3. 안정성 (최대 3점)
+    if current_ratio >= 1.5:
+        score += 1
+    if debt_to_equity <= 1.0:
+        score += 1
+    if altman_z >= 3:
+        score += 1
+
+    # ✅ 4. 수익성 지표 (최대 2점)
+    if net_margin >= 0.15:
+        score += 2
+    elif net_margin >= 0.08:
+        score += 1
+
+    # ✅ 5. 밸류에이션 (최대 2점)
     if dcf_gap >= 0.2:
         score += 2
     elif dcf_gap >= 0.1:
         score += 1
-        
-    # Piotroski Score (예: 8 이상이면 우량)
-    if piotroskiScore >= 8:
+
+    # ✅ 6. 주주환원 (최대 2점)
+    if dividend_yield >= 0.03:
+        score += 2
+    elif dividend_yield >= 0.015:
         score += 1
 
-    # Altman Z-Score (예: 3 이상이면 안정적)
-    if altmanZScore >= 3:
+    # ✅ 7. 종합 스코어 (최대 1점)
+    if piotroski >= 8:
         score += 1
 
     return score
+
 
 async def get_stock_screener_list(filters: dict) -> list[str]:
     url = f"{settings.FMP_BASE_URL}/stable/company-screener"
@@ -1849,39 +2020,63 @@ async def get_stock_screener_list(filters: dict) -> list[str]:
     data = await call_api_async(url, filters)
     return [item["symbol"] for item in data if "symbol" in item]
 
-def visualize_dcf_time_series(dcf_list: list[dict], symbol: str, save_path: str = "../../img/dcf_chart.png"):
-    years = []
-    equity_values = []
-    waccs = []
-    terminal_values = []
+def visualize_dcf_time_series(dcf_list: list[dict], symbol: str, save_path: str):
+    try:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        logger.info(f"📁 이미지 저장 경로 확인됨: {save_path}")
 
-    for item in dcf_list:
-        if not item.get("year"):
-            continue
-        years.append(str(item["year"]))
-        equity_values.append(item.get("equityValuePerShare", 0))
-        waccs.append(item.get("wacc", 0))
-        terminal_values.append(item.get("terminalValue", 0))
+        # 📅 데이터 준비
+        years = []
+        equity_values = []
+        waccs = []
+        terminal_values = []
 
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+        for item in sorted(dcf_list, key=lambda x: x.get("year", "0000")):
+            year = str(item.get("year"))
+            if not year:
+                continue
+            ev = item.get("equityValuePerShare", 0)
+            wacc = item.get("wacc", 0)
+            terminal = item.get("terminalValue", 0)
 
-    ax1.plot(years, equity_values, marker='o', label="Equity/Share ($)")
-    ax1.plot(years, terminal_values, marker='s', label="Terminal Value", linestyle='--')
-    ax1.set_ylabel("Value ($)")
-    ax1.set_title(f"{symbol} DCF 시계열")
-    ax1.grid(True, linestyle="--", alpha=0.5)
+            years.append(year)
+            equity_values.append(ev or 0)
+            waccs.append(wacc or 0)
+            terminal_values.append(terminal or 0)
 
-    ax2 = ax1.twinx()
-    ax2.plot(years, waccs, color='gray', marker='x', label="WACC (%)")
-    ax2.set_ylabel("WACC (%)")
+        if not years:
+            logger.warning(f"❌ 시각화용 DCF 데이터가 없습니다: {symbol}")
+            return
 
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+        # 📊 시각화
+        plt.figure(figsize=(10, 6))
+        plt.rcParams['font.family'] = 'Malgun Gothic'  # 또는 'AppleGothic' (Mac)
+        plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
+        ax1 = plt.gca()
+        ax1.set_title(f"{symbol} DCF 시계열", fontsize=14)
 
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.close()
+        ax1.plot(years, equity_values, label="Equity/Share ($)", marker='o', color='blue')
+        ax1.plot(years, terminal_values, label="Terminal Value", marker='s', linestyle='--', color='green')
+        ax1.set_ylabel("가치 ($)")
+        ax1.grid(True, linestyle="--", alpha=0.5)
+
+        ax2 = ax1.twinx()
+        ax2.plot(years, waccs, label="WACC (%)", marker='x', color='gray')
+        ax2.set_ylabel("WACC (%)")
+
+        # 🎯 범례 통합
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+
+        plt.tight_layout()
+        plt.savefig(save_path)
+        logger.info(f"✅ 차트 이미지 저장 완료: {save_path}")
+        plt.close()
+
+    except Exception as e:
+        logger.error(f"❌ DCF 시각화 실패 ({symbol}): {e}")
+
     
 def format_telegram_message(result: dict) -> str:
     symbol = result["symbol"]
@@ -1890,64 +2085,75 @@ def format_telegram_message(result: dict) -> str:
     price = result.get("current_price", "N/A")
     summary = result.get("summary", "")
 
-    return f"""
-📈 {symbol} 분석 결과*
-점수: {score}
-현재 주가: ${price}
-DCF 가치: ${dcf}
+    # 📈 투자 매력 등급
+    if score >= 13:
+        grade = "✅ 매우 우량"
+    elif score >= 9:
+        grade = "🟢 양호"
+    elif score >= 6:
+        grade = "🟡 보통"
+    else:
+        grade = "🔴 위험"
 
+    return f"""
+📊 *{symbol} 분석 요약*
+
+🧮 점수: {score}/17 → {grade}
+💵 현재 주가: ${price}
+📉 DCF 가치: ${dcf}
+
+📝 GPT 요약:
 {summary}
 """.strip()
+
     
-async def notify_telegram(message: str, image_path: str = None):
+# 비동기 전송 함수
+async def notify_telegram(message: str, save_path: str = None):
     if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
         logger.warning("TELEGRAM 설정이 누락되어 알림 전송 생략")
         return
 
-    # 1. 메시지 전송
-    url_msg = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": settings.TELEGRAM_CHAT_ID, "text": message}
-    async with aiohttp.ClientSession() as session:
-        try:
-            await session.post(url_msg, json=payload)
-            logger.info("📬 Telegram 메시지 전송 완료")
-        except Exception as e:
-            logger.error(f"Telegram 메시지 전송 실패: {e}")
+    try:
+        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 
-    # 2. 이미지 전송 (선택)
-    if image_path and os.path.exists(image_path):
-        url_photo = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendPhoto"
-        data = {"chat_id": settings.TELEGRAM_CHAT_ID}
-        with open(image_path, "rb") as photo:
-            try:
-                async with session.post(url_photo, data=data, files={"photo": photo}) as response:
-                    logger.info(f"📸 Telegram 이미지 전송 완료: {response.status}")
-            except Exception as e:
-                logger.error(f"Telegram 이미지 전송 실패: {e}")
+        # 텍스트 메시지 전송
+        await bot.send_message(chat_id=settings.TELEGRAM_CHAT_ID, text=message)
+        logger.info("📬 Telegram 텍스트 전송 완료")
 
-    
+        # 이미지 파일 전송 (선택)
+        if save_path and os.path.exists(save_path):
+            with open(save_path, "rb") as img:
+                await bot.send_photo(chat_id=settings.TELEGRAM_CHAT_ID, photo=img)
+                logger.info("📸 Telegram 이미지 전송 완료")
+        elif save_path:
+            logger.warning(f"📂 이미지 파일이 존재하지 않음: {save_path}")
+
+    except TelegramError as te:
+        logger.error(f"Telegram 전송 실패 (텔레그램 오류): {te}")
+    except Exception as e:
+        logger.error(f"Telegram 전송 실패 (일반 오류): {e}")
+
 @router.get("/analysis/pipeline")
 async def run_pipeline():
     # 1. 스크리너 필터링: 기술주 + 시가총액 100억 이상 + 배당 2% 이상
     filters = {
-        "marketCapMoreThan": 0,
-        "marketCapLowerThan": 1007331704681,
-        "dividendMoreThan": 0.02,
-        "isEtf": "false",
-        "isFund": "false",
-        "isActivelyTrading": "true",
+        "marketCapMoreThan": 1000000000,       # 시총 10억 이상
+        "dividendMoreThan": 0.02,                 # 배당수익률 2% 이상
+        "volumeMoreThan": 100000,                # 거래량 10만 이상
+        "isEtf": False,
+        "isFund": False,
+        "isActivelyTrading": True,
         "country": "US",
-        "sector": "Technology",
-        "limit": 1
+        "sector": "Technology",                   # 기술 섹터 집중
+        "limit": 1                                # 상위 1개만 분석
     }
 
     symbols = await get_stock_screener_list(filters)
 
     # 2. 재무 데이터 수집
-    #tasks = [fetch_fmp_data(sym) for sym in symbols]
     tasks = [fetch_fmp_data(sym) for sym in symbols]
     all_data = await asyncio.gather(*tasks)
-    
+
     # 3. GPT 분석 (또는 점수 계산)
     results = []
     for data in all_data:
@@ -1958,6 +2164,7 @@ async def run_pipeline():
         try:
             score = score_stock(data)
             summary = await gpt_analyze(data)
+            #summary = "테스트"
 
             result = {
                 "symbol": data["symbol"],
@@ -1969,7 +2176,7 @@ async def run_pipeline():
             results.append(result)
             # ✅ 텔레그램 전송
             message = format_telegram_message(result)
-            await notify_telegram(message, image_path=data.get("image_path"))          
+            await notify_telegram(message, save_path=data.get("save_path"))          
         except Exception as e:
             logger.error(f"GPT 분석 실패: {data['symbol']} - {e}")
             results.append({
