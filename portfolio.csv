@@ -1,0 +1,4 @@
+symbol,quantity,avg_buy_price,target_allocation
+AAPL,100,150,20
+MSFT,50,300,20
+VTI,200,200,60

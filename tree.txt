@@ -1,0 +1,53 @@
+stock_api
+
+ ┣ app
+ ┃ ┣ api
+ ┃ ┃ ┣ v1
+ ┃ ┃ ┃ ┣ alerts.py
+ ┃ ┃ ┃ ┗ stocks_v1.py
+ ┃ ┃ ┣ v2
+ ┃ ┃ ┃ ┗ stocks_v2.py
+ ┃ ┣ core
+ ┃ ┃ ┣ celery_app.py
+ ┃ ┃ ┣ config.py
+ ┃ ┃ ┣ logging.py
+ ┃ ┃ ┣ session.py
+ ┃ ┣ db
+ ┃ ┃ ┣ database.py
+ ┃ ┃ ┗ models.py
+ ┃ ┣ img
+ ┃ ┃ ┣ CRM.png
+ ┃ ┃ ┣ CSCO.png
+ ┃ ┃ ┣ MSFT.png
+ ┃ ┃ ┗ ORCL.png
+ ┃ ┣ models
+ ┃ ┣ tasks
+ ┃ ┃ ┣ tasks.py
+ ┃ ┗ worker.py
+ ┣ config
+ ┃ ┣ advanced_filters.py
+ ┃ ┗ screening_rules.py
+ ┣ log
+ ┃ ┗ app.log
+ ┣ screening
+ ┃ ┣ apply_advanced_filters.py
+ ┃ ┣ fetch_screening_candidates.py
+ ┃ ┗ pipeline.py
+ ┣ utils
+ ┃ ┣ fmp_api.py
+ ┃ ┣ formatter.py
+ ┃ ┣ gpt_summary.py
+ ┃ ┣ notifier.py
+ ┃ ┗ scoring.py
+ ┣ # environment.yml
+ ┣ # environment2.yml
+ ┣ # environment3.yml
+ ┣ .env
+ ┣ .gitignore
+ ┣ API.txt
+ ┣ docker-compose.yml
+ ┣ Dockerfile
+ ┣ log_config.yaml
+ ┣ main.py
+ ┣ requirements.txt
+ ┗ stock_api_postman_collection.json

@@ -1,19 +1,11 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  redis:
-    image: redis:latest
+  api:
+    image: ghcr.io/kimjeacheol/backend:latest
+    container_name: backend
+    restart: always
     ports:
-      - "6379:6379"
-
-  celery_worker:
-    build: .
-    volumes:
-      - .:/app
-    working_dir: /app
-    command: celery -A core.celery_app.celery_app worker --loglevel=INFO
+      - "8000:8000"
     environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      - redis
+      - ENV=production

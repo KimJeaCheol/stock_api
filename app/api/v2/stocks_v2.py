@@ -1,16 +1,30 @@
 # app/api/stocks.py
 import json
 import logging
+import os
+import traceback
+from datetime import datetime
 from typing import Any, List, Optional, Union
 
 import aiohttp
 import numpy as np
+import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse
 from financetoolkit import Toolkit
 
 from app.core.config import settings
 from app.core.logging import logger  # 이미 설정된 logger import
+from screening.economic_monitor import (get_latest_economic_indicators,
+                                        run_economic_monitor_pipeline,
+                                        run_treasury_monitor_pipeline)
+from screening.pipeline import (run_dividend_growth_pipeline,
+                                run_pipeline_for_report)
+from screening.portfolio_rebalance import (rebalance_portfolio_for_report,
+                                           run_portfolio_rebalance_pipeline)
+from utils.notifier import notify_telegram
+from utils.report_generator import generate_investment_report
 
 logging.disable(logging.NOTSET)  # 🚀 모든 로그 활성화
 logging.getLogger().setLevel(logging.DEBUG)  # DEBUG 레벨 강제 설정
@@ -629,3 +643,95 @@ async def get_average_directional_index(symbols: list[str] = Query(...), period:
     except Exception as e:
         logger.error(f"ADX 데이터 조회 실패: {e}")
         raise HTTPException(status_code=500, detail=f"ADX 데이터를 가져오는 중 오류 발생: {str(e)}")
+
+@router.get("/dividends/growth")
+async def get_dividend_growth_stocks():
+    await run_dividend_growth_pipeline()
+    return {"status": "Dividends Growth Stocks 메시지 전송 완료!"}
+
+@router.get("/monitor/treasury")
+async def treasury_monitor():
+    await run_treasury_monitor_pipeline()
+    return {"status": "Treasury Rates 모니터링 완료!"}
+
+@router.get("/monitor/economics")
+async def economics_monitor():
+    await run_economic_monitor_pipeline()
+    return {"status": "Economic Indicators 모니터링 완료!"}
+
+@router.get("/portfolio/rebalance")
+async def rebalance_portfolio():
+    await run_portfolio_rebalance_pipeline(file_path="portfolio.csv")
+    return {"status": "Portfolio Rebalancing Report Sent"}
+
+@router.get("/report/generate")
+async def generate_report():
+    try:
+        logger.info("🚀 [generate_report] 리포트 생성 시작")
+
+        # 1️⃣ 종목 스크리닝 추천 결과 가져오기
+        logger.info("🔍 종목 스크리닝 결과 가져오기 시작")
+        screening_data = await run_pipeline_for_report()
+        # if not screening_data or screening_data.get("count", 0) == 0:
+        #     raise HTTPException(status_code=400, detail="2차 필터 통과 종목 없음: 리포트 생성 불가")
+
+        screening_results = screening_data.get("results", [])
+        logger.info(f"✅ 스크리닝 결과 {len(screening_results)}개")
+
+        # 2️⃣ 포트폴리오 리밸런싱 계산
+        logger.info("📈 포트폴리오 리밸런싱 계산 시작")
+        rebalance_df, portfolio_summary = await rebalance_portfolio_for_report(file_path="portfolio.csv")
+        owned_symbols = set(rebalance_df["symbol"])
+
+        portfolio_rebalancing = []
+        for _, row in rebalance_df.iterrows():
+            portfolio_rebalancing.append({
+                "symbol": row['symbol'],
+                "current_price": row['current_price'],
+                "target_allocation": row['target_allocation'],
+                "current_allocation": row['current_allocation'],
+                "recommendation": f"{'매수' if row['target_allocation'] > row['current_allocation'] else '매도'} {abs(row['quantity_diff'])}주"
+            })
+        logger.info(f"✅ 포트폴리오 리밸런싱 {len(portfolio_rebalancing)}개")
+
+        # 3️⃣ 신규 종목 추천 리스트 (보유 중인 종목 제외)
+        logger.info("🆕 신규 종목 추천 리스트 생성")
+        stock_recommendations = []
+        for stock in screening_results:
+            if stock["symbol"] not in owned_symbols:
+                stock_recommendations.append({
+                    "symbol": stock["symbol"],
+                    "score": stock.get("score", "N/A"),
+                    "dcf_chart_path": stock.get("dcf_chart_path", ""),
+                    "gpt_summary": stock.get("gpt_summary", "요약 데이터 없음")
+                })
+        logger.info(f"✅ 신규 추천 종목 {len(stock_recommendations)}개")
+
+        # 4️⃣ 경제지표 요약
+        logger.info("🌍 경제지표 요약 데이터 수집")
+        economic_summary = await get_latest_economic_indicators()
+        logger.info(f"✅ 경제지표 수집 완료")
+
+        # 5️⃣ 리포트 파일명 및 경로
+        report_name = f"{datetime.now().strftime('%Y%m%d')}_investment_report.pdf"
+        output_path = f"reports/{report_name}"
+
+        # 6️⃣ PDF 리포트 생성
+        logger.info("📄 PDF 리포트 생성 시작")
+        generate_investment_report(stock_recommendations, portfolio_rebalancing, portfolio_summary, economic_summary, output_path)
+        logger.info(f"✅ PDF 리포트 저장 완료: {output_path}")
+
+        # 7️⃣ Telegram 전송 (선택적)
+        logger.info("✉️ Telegram 리포트 전송 시작")
+        await notify_telegram(message="📄 투자 리포트 자동 생성 완료", file_path=output_path)
+        logger.info("✅ Telegram 리포트 전송 완료")
+
+        return FileResponse(path=output_path, filename=report_name, media_type='application/pdf')
+
+    except HTTPException as http_exc:
+        logger.error(f"❌ [HTTPException] {http_exc.detail}")
+        raise http_exc
+
+    except Exception as e:
+        logger.error(f"❌ [generate_report] 전체 실패: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="투자 리포트 생성 중 내부 서버 오류 발생")

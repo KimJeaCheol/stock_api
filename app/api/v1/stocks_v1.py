@@ -23,6 +23,7 @@ from app.core.logging import logger  # 이미 설정된 logger import
 from app.tasks.tasks import (analyze_candlestick_patterns, analyze_trend,
                              backtest_strategy, generate_trade_signal,
                              manage_risk)
+from screening.pipeline import run_pipeline as new_run_pipeline
 
 router = APIRouter()
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -2136,53 +2137,55 @@ async def notify_telegram(message: str, save_path: str = None):
 @router.get("/analysis/pipeline")
 async def run_pipeline():
     # 1. 스크리너 필터링: 기술주 + 시가총액 100억 이상 + 배당 2% 이상
-    filters = {
-        "marketCapMoreThan": 1000000000,       # 시총 10억 이상
-        "dividendMoreThan": 0.02,                 # 배당수익률 2% 이상
-        "volumeMoreThan": 100000,                # 거래량 10만 이상
-        "isEtf": False,
-        "isFund": False,
-        "isActivelyTrading": True,
-        "country": "US",
-        "sector": "Technology",                   # 기술 섹터 집중
-        "limit": 1                                # 상위 1개만 분석
-    }
+    # filters = {
+    #     "marketCapMoreThan": 1000000000,       # 시총 10억 이상
+    #     "dividendMoreThan": 0.02,                 # 배당수익률 2% 이상
+    #     "volumeMoreThan": 100000,                # 거래량 10만 이상
+    #     "isEtf": False,
+    #     "isFund": False,
+    #     "isActivelyTrading": True,
+    #     "country": "US",
+    #     "sector": "Technology",                   # 기술 섹터 집중
+    #     "limit": 1                                # 상위 1개만 분석
+    # }
 
-    symbols = await get_stock_screener_list(filters)
+    # symbols = await get_stock_screener_list(filters)
 
-    # 2. 재무 데이터 수집
-    tasks = [fetch_fmp_data(sym) for sym in symbols]
-    all_data = await asyncio.gather(*tasks)
+    # # 2. 재무 데이터 수집
+    # tasks = [fetch_fmp_data(sym) for sym in symbols]
+    # all_data = await asyncio.gather(*tasks)
 
-    # 3. GPT 분석 (또는 점수 계산)
-    results = []
-    for data in all_data:
-        if "error" in data:
-            logger.warning(f"⚠️ 데이터 오류: {data}")
-            continue
+    # # 3. GPT 분석 (또는 점수 계산)
+    # results = []
+    # for data in all_data:
+    #     if "error" in data:
+    #         logger.warning(f"⚠️ 데이터 오류: {data}")
+    #         continue
 
-        try:
-            score = score_stock(data)
-            summary = await gpt_analyze(data)
-            #summary = "테스트"
+    #     try:
+    #         score = score_stock(data)
+    #         summary = await gpt_analyze(data)
+    #         #summary = "테스트"
 
-            result = {
-                "symbol": data["symbol"],
-                "score": score,
-                "summary": summary,
-                "dcf_value": data.get("dcf_value", 0),
-                "current_price": data.get("profile", {}).get("price", 0),
-            }
-            results.append(result)
-            # ✅ 텔레그램 전송
-            message = format_telegram_message(result)
-            await notify_telegram(message, save_path=data.get("save_path"))          
-        except Exception as e:
-            logger.error(f"GPT 분석 실패: {data['symbol']} - {e}")
-            results.append({
-                "symbol": data["symbol"],
-                "score": None,
-                "summary": "분석 실패",
-                "error": str(e)
-            })
-    return {"count": len(results), "results": results}
+    #         result = {
+    #             "symbol": data["symbol"],
+    #             "score": score,
+    #             "summary": summary,
+    #             "dcf_value": data.get("dcf_value", 0),
+    #             "current_price": data.get("profile", {}).get("price", 0),
+    #         }
+    #         results.append(result)
+    #         # ✅ 텔레그램 전송
+    #         message = format_telegram_message(result)
+    #         await notify_telegram(message, save_path=data.get("save_path"))          
+    #     except Exception as e:
+    #         logger.error(f"GPT 분석 실패: {data['symbol']} - {e}")
+    #         results.append({
+    #             "symbol": data["symbol"],
+    #             "score": None,
+    #             "summary": "분석 실패",
+    #             "error": str(e)
+    #         })
+    #return {"count": len(results), "results": results}
+    filtered_symbols = await new_run_pipeline()
+    return {"filtered_symbols": filtered_symbols}
