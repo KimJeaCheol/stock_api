@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: ["master"] # main 브랜치에 push될 때 자동 실행
+    branches: ["main"] # main 브랜치에 push될 때 자동 실행
 
 jobs:
   build-and-push:
