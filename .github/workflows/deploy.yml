@@ -1,29 +1,37 @@
-name: Deploy Backend
+name: CI/CD Deploy Backend to Synology
 
 on:
   push:
-    branches: ["main"] # main 브랜치에 push될 때 자동 실행
+    branches: [ "master" ]   # 실제 배포할 브랜치 (master 또는 main)
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build and push Docker image
-        run: |
-          IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USER }}/backend:latest
-          docker build -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ secrets.GHCR_USER }}/backend:latest
+            ghcr.io/${{ secrets.GHCR_USER }}/backend:${{ github.sha }}
 
   deploy-to-nas:
     runs-on: ubuntu-latest
@@ -38,7 +46,7 @@ jobs:
         run: |
           ssh -p 2222 -o StrictHostKeyChecking=no ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} << 'EOF'
           set -e
-          cd /volume1/docker/ironfarm-api
+          cd /volume1/docker/backend
           echo "🔑 Docker login..."
           docker login ghcr.io -u ${{ secrets.GHCR_USER }} -p ${{ secrets.GHCR_TOKEN }}
           echo "⬇️ Pull latest image..."
