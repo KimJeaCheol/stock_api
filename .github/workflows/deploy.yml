@@ -2,7 +2,7 @@ name: CI/CD Deploy Backend to Synology
 
 on:
   push:
-    branches: [ "master" ]   # 실제 배포할 브랜치 (master 또는 main)
+    branches: [ "main" ]   # 실제 배포할 브랜치 (master 또는 main)
 
 jobs:
   build-and-push:
