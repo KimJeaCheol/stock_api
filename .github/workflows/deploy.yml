@@ -1,4 +1,4 @@
-name: Deploy Backend
+name: Deploy Python Backend
 
 on:
   push:
@@ -7,7 +7,9 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -21,7 +23,7 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USER }}/backend:latest
+          IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USER }}/python-backend:latest
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
@@ -38,7 +40,7 @@ jobs:
         run: |
           ssh -p 2222 -o StrictHostKeyChecking=no ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} << 'EOF'
           set -e
-          cd /volume1/docker/ironfarm-api
+          cd /volume1/docker/python-backend
           echo "🔑 Docker login..."
           docker login ghcr.io -u ${{ secrets.GHCR_USER }} -p ${{ secrets.GHCR_TOKEN }}
           echo "⬇️ Pull latest image..."
