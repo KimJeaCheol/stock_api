@@ -2,8 +2,8 @@ version: "3.9"
 
 services:
   api:
-    image: ghcr.io/kimjeacheol/backend:latest
-    container_name: backend
+    image: ghcr.io/kimjeacheol/python-backend:latest
+    container_name: python-backend
     restart: always
     ports:
       - "8000:8000"
