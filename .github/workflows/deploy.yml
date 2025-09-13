@@ -47,12 +47,23 @@ jobs:
           ssh -p 2222 -o StrictHostKeyChecking=no ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} << 'EOF'
           set -e
           cd /volume1/docker/python-backend
+
+          # 🔑 환경변수를 .env 파일에 저장
+          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+          echo "FMP_BASE_URL=${{ secrets.FMP_BASE_URL }}" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+
           echo "🔑 Docker login..."
           docker login ghcr.io -u ${{ secrets.GHCR_USER }} -p ${{ secrets.GHCR_TOKEN }}
+
           echo "⬇️ Pull latest image..."
           docker compose pull
+
           echo "🚀 Restarting container..."
           docker compose up -d
+
           echo "🧹 Cleaning old images..."
           docker image prune -f
           EOF
